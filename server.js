@@ -1,33 +1,49 @@
 const express = require('express');
 const puppeteer = require('puppeteer-core');
 const path = require('path');
+const fs = require('fs');
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
+// 静的ファイルを提供（index.html など）
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/screenshot', async (req, res) => {
-  const url = req.query.url;
-  if (!url) {
-    return res.status(400).send('URL is required');
-  }
+// Chromium のパスを環境変数から取得
+const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/chromium-browser';
 
+// ルートにアクセスされたとき、ストリーミング画像を生成して表示
+app.get('/screenshot', async (req, res) => {
   try {
     const browser = await puppeteer.launch({
-      executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium-browser',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      executablePath: CHROME_PATH,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
+
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2' });
-    const screenshot = await page.screenshot({ encoding: 'base64' });
+    await page.goto('https://example.com'); // スクリーンショットしたいURL
+
+    const screenshotBuffer = await page.screenshot({ type: 'jpeg' });
+
     await browser.close();
-    res.send(screenshot);
+
+    res.set('Content-Type', 'image/jpeg');
+    res.send(screenshotBuffer);
   } catch (err) {
     console.error(err);
-    res.status(500).send('Error taking screenshot');
+    res.status(500).send('Error generating screenshot');
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+// index.htmlがなければ「Cannot GET /」になるので対応
+app.get('/', (req, res) => {
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.send('<h1>Welcome</h1><p>index.html がありません</p>');
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server is running at http://localhost:${PORT}`);
 });
