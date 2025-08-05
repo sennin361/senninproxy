@@ -1,7 +1,7 @@
 services:
   - type: web
-    name: youtube-streamer
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
+    name: youtube-stream-viewer
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
     plan: free
