@@ -1,36 +1,33 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
-const cors = require('cors');
+const puppeteer = require('puppeteer-core');
 const path = require('path');
-
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = process.env.PORT || 3000;
 
-app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/proxy', async (req, res) => {
-  const { url } = req.query;
-  if (!url || !url.startsWith('http')) {
-    return res.status(400).send('URLが正しくありません');
+app.get('/screenshot', async (req, res) => {
+  const url = req.query.url;
+  if (!url) {
+    return res.status(400).send('URL is required');
   }
 
   try {
     const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium-browser',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-
-    const html = await page.content();
-    res.send(html);
+    await page.goto(url, { waitUntil: 'networkidle2' });
+    const screenshot = await page.screenshot({ encoding: 'base64' });
     await browser.close();
-  } catch (error) {
-    res.status(500).send('取得に失敗しました: ' + error.message);
+    res.send(screenshot);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error taking screenshot');
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`仙人Proxyサーバー起動: http://localhost:${PORT}`);
+app.listen(port, () => {
+  console.log(`Server running on http://localhost:${port}`);
 });
