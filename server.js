@@ -1,49 +1,48 @@
 const express = require('express');
-const puppeteer = require('puppeteer-core');
-const path = require('path');
-const fs = require('fs');
+const ytdl = require('ytdl-core');
+const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 静的ファイルを提供（index.html など）
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(cors());
 
-// Chromium のパスを環境変数から取得
-const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/chromium-browser';
+// ストリーム再生用APIエンドポイント
+// クエリパラメータ: videoId=動画ID
+app.get('/stream', async (req, res) => {
+  const videoId = req.query.videoId;
+  if (!videoId) {
+    return res.status(400).send('videoIdパラメータが必要です');
+  }
 
-// ルートにアクセスされたとき、ストリーミング画像を生成して表示
-app.get('/screenshot', async (req, res) => {
   try {
-    const browser = await puppeteer.launch({
-      executablePath: CHROME_PATH,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    // ytdl-coreで動画情報取得＆動画ストリームを抽出
+    const info = await ytdl.getInfo(videoId);
 
-    const page = await browser.newPage();
-    await page.goto('https://example.com'); // スクリーンショットしたいURL
+    // 最高画質の動画+音声（または音声のみ）を選択（例: itag 22など）
+    // ここではmp4の動画+音声が含まれるものを優先して選択
+    const format = ytdl.chooseFormat(info.formats, { quality: 'highestvideo', filter: 'audioandvideo' }) ||
+                   ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
 
-    const screenshotBuffer = await page.screenshot({ type: 'jpeg' });
+    if (!format || !format.url) {
+      return res.status(404).send('再生可能なフォーマットが見つかりません');
+    }
 
-    await browser.close();
+    // レスポンスヘッダー設定
+    res.header('Content-Type', 'video/mp4');
 
-    res.set('Content-Type', 'image/jpeg');
-    res.send(screenshotBuffer);
+    // ytdl-coreで動画ストリームを直接パイプで返す
+    ytdl(videoId, {
+      quality: format.itag,
+      filter: format.hasAudio && format.hasVideo ? 'audioandvideo' : 'audioonly',
+      highWaterMark: 1 << 25  // バッファサイズ大きめ
+    }).pipe(res);
+
   } catch (err) {
     console.error(err);
-    res.status(500).send('Error generating screenshot');
-  }
-});
-
-// index.htmlがなければ「Cannot GET /」になるので対応
-app.get('/', (req, res) => {
-  const indexPath = path.join(__dirname, 'public', 'index.html');
-  if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.send('<h1>Welcome</h1><p>index.html がありません</p>');
+    res.status(500).send('動画ストリーム取得に失敗しました');
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running at http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
