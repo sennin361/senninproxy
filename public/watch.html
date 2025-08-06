@@ -21,7 +21,6 @@
       margin: auto;
     }
 
-    /* iframeのままのサイズ・見た目を維持 */
     video {
       width: 100%;
       height: 450px;
@@ -105,8 +104,8 @@
 </head>
 <body>
   <div class="container">
-    <!-- 🎥 Videoプレイヤー（iframe置換） -->
-    <video id="video-frame" controls autoplay></video>
+    <!-- 🎥 裏抽出ストリーム表示用 video タグ -->
+    <video id="video-player" controls autoplay></video>
 
     <div class="title" id="video-title">タイトル読み込み中...</div>
     <div class="meta" id="video-meta"></div>
@@ -140,7 +139,7 @@
 
     const params = new URLSearchParams(window.location.search);
     const videoId = params.get('id');
-    const videoEl = document.getElementById('video-frame');
+    const videoEl = document.getElementById('video-player');
     const titleEl = document.getElementById('video-title');
     const metaEl = document.getElementById('video-meta');
     const commentsEl = document.getElementById('comments');
@@ -149,9 +148,9 @@
       titleEl.textContent = '無効な動画IDです';
       videoEl.style.display = 'none';
     } else {
-      loadStream();
       loadVideoInfo();
       loadComments();
+      loadStreamUrl(videoId);
     }
 
     async function fetchWithRetry(url) {
@@ -166,20 +165,6 @@
         return res.json();
       }
       throw new Error('APIキーの上限に達しました');
-    }
-
-    async function loadStream() {
-      try {
-        const res = await fetch(`http://localhost:3000/api/stream?v=${videoId}`);
-        const data = await res.json();
-        if (!data.url) {
-          throw new Error('ストリームURL取得失敗');
-        }
-        videoEl.src = data.url;
-      } catch (e) {
-        alert('動画の再生に失敗しました。');
-        videoEl.style.display = 'none';
-      }
     }
 
     async function loadVideoInfo() {
@@ -227,7 +212,19 @@
       }
     }
 
-    // ✅ Service Worker 登録
+    async function loadStreamUrl(videoId) {
+      try {
+        const res = await fetch(`/stream?videoId=${videoId}`);
+        if (!res.ok) throw new Error('ストリーム取得失敗');
+        const streamUrl = await res.text();
+        videoEl.src = streamUrl;
+      } catch (e) {
+        videoEl.style.display = 'none';
+        titleEl.textContent = '動画の再生に失敗しました。';
+        console.error(e);
+      }
+    }
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js')
         .then(() => console.log("Service Worker 登録成功"))
