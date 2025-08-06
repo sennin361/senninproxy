@@ -1,16 +1,13 @@
 {
-  "name": "youtube-stream-proxy",
+  "name": "youtube-proxy-server",
   "version": "1.0.0",
-  "description": "YouTube裏抽出ストリーム再生用サーバー",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "author": "",
-  "license": "MIT",
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "ytdl-core": "^4.11.1",
-    "cors": "^2.8.5"
+    "ytdl-core": "^4.11.4"
   }
 }
