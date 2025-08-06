@@ -6,10 +6,11 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// CORSと静的ファイルの設定
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ✅ 動画のストリーム再生エンドポイント
+// 🎥 動画ストリームエンドポイント（リダイレクト方式推奨）
 app.get('/stream', async (req, res) => {
   const { videoId, itag } = req.query;
 
@@ -25,15 +26,15 @@ app.get('/stream', async (req, res) => {
       return res.status(404).send('Format not found');
     }
 
-    res.setHeader('Content-Type', 'video/mp4');
-    ytdl(videoId, { quality: itag }).pipe(res);
+    // ストリーミングURLへリダイレクト（スマホ対応）
+    res.redirect(format.url);
   } catch (error) {
     console.error('ストリーミングエラー:', error.message);
     res.status(500).send('ストリーミングエラー: ' + error.message);
   }
 });
 
-// ✅ 利用可能なフォーマット一覧を返すエンドポイント
+// 📺 利用可能なフォーマットを返すエンドポイント
 app.get('/formats', async (req, res) => {
   const { videoId } = req.query;
 
@@ -43,6 +44,8 @@ app.get('/formats', async (req, res) => {
 
   try {
     const info = await ytdl.getInfo(videoId);
+
+    // mp4形式かつ映像・音声両方を含むフォーマットを取得
     const formats = info.formats
       .filter(f => f.hasVideo && f.hasAudio && f.container === 'mp4')
       .map(f => ({
@@ -52,7 +55,7 @@ app.get('/formats', async (req, res) => {
         fps: f.fps
       }));
 
-    // 重複 itag を排除
+    // 重複 itag を削除
     const unique = [];
     const seen = new Set();
     for (const f of formats) {
@@ -69,12 +72,12 @@ app.get('/formats', async (req, res) => {
   }
 });
 
-// ✅ その他のルートは index.html を返す（SPA対応）
+// SPA対応: それ以外のルートは index.html を返す
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ✅ サーバー起動
+// サーバー起動
 app.listen(PORT, () => {
   console.log(`✅ YouTube Stream Proxy Server is running on port ${PORT}`);
 });
