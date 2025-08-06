@@ -113,10 +113,8 @@
 </head>
 <body>
   <div class="container">
-    <!-- 🎥 YouTube動画再生 -->
     <video id="video-player" controls autoplay></video>
 
-    <!-- 🔧 画質選択 -->
     <div class="quality-selector">
       <label for="quality-select">画質を選択:</label>
       <select id="quality-select"></select>
@@ -133,7 +131,6 @@
   <script>
     const API_KEYS = [
       'AIzaSyAHtZ0sgA9x7yBFnJO4pFTexhn4eQMa4iE',
-      // 必要に応じて複数キーを登録
     ];
     let apiIndex = 0;
 
@@ -147,11 +144,6 @@
 
     function getApiKey() {
       return apiIndex < API_KEYS.length ? API_KEYS[apiIndex] : null;
-    }
-
-    function nextApiKey() {
-      apiIndex++;
-      return getApiKey();
     }
 
     async function fetchWithRetry(url) {
@@ -183,7 +175,6 @@
         const formats = await res.json();
 
         qualitySelect.innerHTML = '';
-
         formats.forEach(f => {
           const opt = document.createElement('option');
           opt.value = f.itag;
@@ -254,7 +245,6 @@
       }
     }
 
-    // ✅ PWA 対応 Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js')
         .then(() => console.log("Service Worker 登録成功"))
