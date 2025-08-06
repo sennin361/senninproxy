@@ -1,57 +1,63 @@
 const express = require('express');
 const ytdl = require('ytdl-core');
-const path = require('path');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// CORS許可（必要なら調整）
 app.use(cors());
+
+// 静的ファイル（index.html や watch.html 等を置く）
 app.use(express.static(path.join(__dirname, 'public')));
 
+// 動画ストリーム用エンドポイント
 app.get('/stream', async (req, res) => {
   const videoId = req.query.videoId;
-  if (!videoId) return res.status(400).send('videoIdが必要です');
+  if (!videoId) {
+    return res.status(400).send('videoId パラメータが必要です');
+  }
 
   try {
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const info = await ytdl.getInfo(url);
+    // YouTube動画情報取得
+    const info = await ytdl.getInfo(videoId);
 
-    // 🎯 動画＋音声の統合フォーマットを選ぶ（失敗時は分離型を使う）
-    const format =
-      ytdl.chooseFormat(info.formats, {
-        quality: 'highest',
-        filter: (f) => f.hasAudio && f.hasVideo && f.container === 'mp4',
-      }) ||
-      ytdl.chooseFormat(info.formats, {
-        quality: 'highest',
-        filter: (f) => f.hasAudio && f.hasVideo,
-      });
+    // mp4コンテナで映像+音声両方ある形式を探す
+    const format = info.formats.find(f =>
+      f.container === 'mp4' &&
+      f.hasVideo === true &&
+      f.hasAudio === true &&
+      !f.hasDrm
+    );
 
-    if (!format || !format.url) {
-      console.warn('有効なフォーマットが見つかりません');
-      return res.status(500).send('利用可能な動画フォーマットが見つかりません');
+    if (!format) {
+      return res.status(404).send('対応する動画フォーマットが見つかりません');
     }
 
-    // Debug: ステータス確認用
-    console.log(`🎥 Streaming: ${format.qualityLabel} / ${format.container} / ${format.url}`);
+    // レスポンスヘッダー設定（動画ファイルとして）
+    res.header('Content-Type', 'video/mp4');
+    res.header('Content-Length', format.contentLength || 0);
+    // Rangeリクエスト対応もできますが今回はシンプルに
 
-    res.setHeader('Content-Type', 'video/mp4');
-    ytdl(url, { format }).pipe(res);
+    // ストリーム開始
+    const stream = ytdl.downloadFromInfo(info, { format });
+
+    stream.on('error', err => {
+      console.error('ストリームエラー:', err);
+      try { res.end(); } catch {}
+    });
+
+    stream.pipe(res);
+
   } catch (err) {
-    console.error('ストリーミングエラー:', err.message);
+    console.error(err);
     res.status(500).send('動画のストリーミングに失敗しました');
   }
 });
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.use((req, res) => {
-  res.status(404).send('ページが見つかりません');
-});
+// その他ルートは静的ファイルが対応
 
 app.listen(PORT, () => {
-  console.log(`✅ YouTube Stream Proxy Server is running at http://localhost:${PORT}`);
+  console.log(`YouTube Stream Proxy Server is running on port ${PORT}`);
 });
