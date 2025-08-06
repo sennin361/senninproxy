@@ -104,7 +104,7 @@
 </head>
 <body>
   <div class="container">
-    <!-- 🎥 裏抽出ストリーム表示用 video タグ -->
+    <!-- 🎥 YouTube動画再生 -->
     <video id="video-player" controls autoplay></video>
 
     <div class="title" id="video-title">タイトル読み込み中...</div>
@@ -128,15 +128,6 @@
     ];
     let apiIndex = 0;
 
-    function getApiKey() {
-      return apiIndex < API_KEYS.length ? API_KEYS[apiIndex] : null;
-    }
-
-    function nextApiKey() {
-      apiIndex++;
-      return getApiKey();
-    }
-
     const params = new URLSearchParams(window.location.search);
     const videoId = params.get('id');
     const videoEl = document.getElementById('video-player');
@@ -144,13 +135,13 @@
     const metaEl = document.getElementById('video-meta');
     const commentsEl = document.getElementById('comments');
 
-    if (!videoId) {
-      titleEl.textContent = '無効な動画IDです';
-      videoEl.style.display = 'none';
-    } else {
-      loadVideoInfo();
-      loadComments();
-      loadStreamUrl(videoId);
+    function getApiKey() {
+      return apiIndex < API_KEYS.length ? API_KEYS[apiIndex] : null;
+    }
+
+    function nextApiKey() {
+      apiIndex++;
+      return getApiKey();
     }
 
     async function fetchWithRetry(url) {
@@ -167,19 +158,35 @@
       throw new Error('APIキーの上限に達しました');
     }
 
-    async function loadVideoInfo() {
+    if (!videoId) {
+      titleEl.textContent = '無効な動画IDです';
+      videoEl.style.display = 'none';
+    } else {
+      loadVideo();
+      loadComments();
+    }
+
+    async function loadVideo() {
+      try {
+        // 🎯 プロキシ経由で再生（CORS安全）
+        videoEl.src = `/stream?videoId=${videoId}`;
+      } catch (e) {
+        videoEl.style.display = 'none';
+        titleEl.textContent = '動画の再生に失敗しました。';
+        console.error(e);
+      }
+
       try {
         const data = await fetchWithRetry(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=API_KEY`);
         if (!data.items || data.items.length === 0) {
           titleEl.textContent = '動画が見つかりません';
-          videoEl.style.display = 'none';
           return;
         }
         const video = data.items[0];
         titleEl.textContent = video.snippet.title;
         metaEl.innerHTML = `<a href="channel.html?id=${video.snippet.channelId}">${video.snippet.channelTitle}</a> - ${new Date(video.snippet.publishedAt).toLocaleDateString()}`;
       } catch (e) {
-        alert('動画情報の取得に失敗しました。');
+        console.error(e);
       }
     }
 
@@ -212,19 +219,7 @@
       }
     }
 
-    async function loadStreamUrl(videoId) {
-      try {
-        const res = await fetch(`/stream?videoId=${videoId}`);
-        if (!res.ok) throw new Error('ストリーム取得失敗');
-        const streamUrl = await res.text();
-        videoEl.src = streamUrl;
-      } catch (e) {
-        videoEl.style.display = 'none';
-        titleEl.textContent = '動画の再生に失敗しました。';
-        console.error(e);
-      }
-    }
-
+    // ✅ PWA 対応 Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js')
         .then(() => console.log("Service Worker 登録成功"))
