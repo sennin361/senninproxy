@@ -104,7 +104,6 @@
 </head>
 <body>
   <div class="container">
-    <!-- 🎥 YouTube動画再生 -->
     <video id="video-player" controls autoplay></video>
 
     <div class="title" id="video-title">タイトル読み込み中...</div>
@@ -117,15 +116,11 @@
 
   <script>
     const API_KEYS = [
+      // あなたのAPIキーを複数入れておくと制限回避になります
       'AIzaSyAHtZ0sgA9x7yBFnJO4pFTexhn4eQMa4iE',
       'AIzaSyB61hHLbtWnXpUwGePHF47VTC1vFCfRUx0',
       'AIzaSyByIBVpyf6HPLIrh5Rv49lN6Lre_LA0v68',
       'AIzaSyDd_sQjAGvDtkL8JC4Z5C5V5k5uCfaKEW8',
-      'AIzaSyCyRNjwH_yPqiGPxpTm_F6JWgo2sEfiNzI',
-      'AIzaSyBgawf2kGHDh4hzFud7duAXN6RHT4R_ZaY',
-      'AIzaSyCyRNjwH_yPqiGPxpTm_F6JWgo2sEfiNzI',
-      'AIzaSyBmBkch1otJdpnCdbs3rTNGCUtBDvYj5Bs',
-      'AIzaSyDCnGORSVtqy5gDIARA4r6e51xt0QCypdE',
     ];
     let apiIndex = 0;
 
@@ -169,7 +164,6 @@
 
     async function loadVideo() {
       try {
-        // 🎯 プロキシ経由で再生（CORS安全）
         videoEl.src = `/stream?videoId=${videoId}`;
       } catch (e) {
         videoEl.style.display = 'none';
@@ -220,7 +214,6 @@
       }
     }
 
-    // ✅ PWA 対応 Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js')
         .then(() => console.log("Service Worker 登録成功"))
