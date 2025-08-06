@@ -1,50 +1,46 @@
 const express = require('express');
 const ytdl = require('ytdl-core');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-// ✅ 動作確認用ルート
+// ✅ publicフォルダの静的ファイルを配信
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ✅ ルートアクセスは index.html を返す（オプション）
 app.get('/', (req, res) => {
-  res.send('YouTube Stream Proxy Server is running.');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 🎥 ストリーミング用エンドポイント
+// ✅ YouTube動画のプロキシエンドポイント
 app.get('/stream', async (req, res) => {
   const videoId = req.query.videoId;
-
-  if (!videoId || !ytdl.validateID(videoId)) {
-    return res.status(400).send('無効な videoId です。');
-  }
+  if (!videoId) return res.status(400).send('Missing videoId');
 
   try {
-    const info = await ytdl.getInfo(videoId);
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const info = await ytdl.getInfo(url);
+
     const format = ytdl.chooseFormat(info.formats, {
-      quality: 'highest',
+      quality: '18', // medium MP4
       filter: 'audioandvideo'
     });
 
     if (!format || !format.url) {
-      return res.status(404).send('適切なフォーマットが見つかりませんでした。');
+      return res.status(404).send('Stream URL not found');
     }
 
-    res.setHeader('Content-Type', 'video/mp4');
-    ytdl(videoId, {
-      format,
-      quality: 'highest',
-      filter: 'audioandvideo',
-    }).pipe(res);
-
-  } catch (err) {
-    console.error('ストリーム取得エラー:', err);
-    res.status(500).send('ストリームの取得中にエラーが発生しました。');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.redirect(format.url); // 🔁 URLにリダイレクト
+  } catch (e) {
+    res.status(500).send('Error retrieving video');
   }
 });
 
-// 🚀 サーバー起動
 app.listen(PORT, () => {
-  console.log(`✅ サーバー起動: http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
