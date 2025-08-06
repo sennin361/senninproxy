@@ -130,7 +130,7 @@
 
   <script>
     const API_KEYS = [
-      'AIzaSyAHtZ0sgA9x7yBFnJO4pFTexhn4eQMa4iE',
+      'AIzaSyDIoREN7XZjtgEdmfmvuxvm2q_OAb2myMs'
     ];
     let apiIndex = 0;
 
@@ -144,6 +144,11 @@
 
     function getApiKey() {
       return apiIndex < API_KEYS.length ? API_KEYS[apiIndex] : null;
+    }
+
+    function nextApiKey() {
+      apiIndex++;
+      return getApiKey();
     }
 
     async function fetchWithRetry(url) {
@@ -175,6 +180,7 @@
         const formats = await res.json();
 
         qualitySelect.innerHTML = '';
+
         formats.forEach(f => {
           const opt = document.createElement('option');
           opt.value = f.itag;
