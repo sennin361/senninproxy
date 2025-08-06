@@ -100,11 +100,27 @@
       white-space: pre-wrap;
       line-height: 1.5;
     }
+
+    .quality-selector {
+      margin: 1em 0;
+    }
+
+    .quality-selector select {
+      padding: 0.3em;
+      font-size: 1em;
+    }
   </style>
 </head>
 <body>
   <div class="container">
+    <!-- 🎥 YouTube動画再生 -->
     <video id="video-player" controls autoplay></video>
+
+    <!-- 🔧 画質選択 -->
+    <div class="quality-selector">
+      <label for="quality-select">画質を選択:</label>
+      <select id="quality-select"></select>
+    </div>
 
     <div class="title" id="video-title">タイトル読み込み中...</div>
     <div class="meta" id="video-meta"></div>
@@ -116,11 +132,8 @@
 
   <script>
     const API_KEYS = [
-      // あなたのAPIキーを複数入れておくと制限回避になります
       'AIzaSyAHtZ0sgA9x7yBFnJO4pFTexhn4eQMa4iE',
-      'AIzaSyB61hHLbtWnXpUwGePHF47VTC1vFCfRUx0',
-      'AIzaSyByIBVpyf6HPLIrh5Rv49lN6Lre_LA0v68',
-      'AIzaSyDd_sQjAGvDtkL8JC4Z5C5V5k5uCfaKEW8',
+      // 必要に応じて複数キーを登録
     ];
     let apiIndex = 0;
 
@@ -130,6 +143,7 @@
     const titleEl = document.getElementById('video-title');
     const metaEl = document.getElementById('video-meta');
     const commentsEl = document.getElementById('comments');
+    const qualitySelect = document.getElementById('quality-select');
 
     function getApiKey() {
       return apiIndex < API_KEYS.length ? API_KEYS[apiIndex] : null;
@@ -158,19 +172,45 @@
       titleEl.textContent = '無効な動画IDです';
       videoEl.style.display = 'none';
     } else {
-      loadVideo();
+      loadFormats();
       loadComments();
+      loadMetadata();
     }
 
-    async function loadVideo() {
+    async function loadFormats() {
       try {
-        videoEl.src = `/stream?videoId=${videoId}`;
-      } catch (e) {
-        videoEl.style.display = 'none';
-        titleEl.textContent = '動画の再生に失敗しました。';
-        console.error(e);
-      }
+        const res = await fetch(`/formats?videoId=${videoId}`);
+        const formats = await res.json();
 
+        qualitySelect.innerHTML = '';
+
+        formats.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f.itag;
+          opt.textContent = f.quality;
+          qualitySelect.appendChild(opt);
+        });
+
+        if (formats.length > 0) {
+          qualitySelect.value = formats[0].itag;
+          loadVideoWithItag(formats[0].itag);
+        }
+      } catch (err) {
+        console.error('画質の取得に失敗しました', err);
+        titleEl.textContent = '動画の読み込みに失敗しました';
+      }
+    }
+
+    function loadVideoWithItag(itag) {
+      videoEl.src = `/stream?videoId=${videoId}&itag=${itag}`;
+    }
+
+    qualitySelect.addEventListener('change', () => {
+      const selectedItag = qualitySelect.value;
+      loadVideoWithItag(selectedItag);
+    });
+
+    async function loadMetadata() {
       try {
         const data = await fetchWithRetry(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=API_KEY`);
         if (!data.items || data.items.length === 0) {
@@ -214,6 +254,7 @@
       }
     }
 
+    // ✅ PWA 対応 Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js')
         .then(() => console.log("Service Worker 登録成功"))
