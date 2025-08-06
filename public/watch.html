@@ -15,38 +15,31 @@
       margin: 0;
       padding: 1em;
     }
-
     .container {
       max-width: 900px;
       margin: auto;
     }
-
     video {
       width: 100%;
       height: 450px;
       border-radius: 8px;
       background: black;
     }
-
     .title {
       font-size: 1.5em;
       margin: 0.5em 0;
     }
-
     .meta {
       color: #aaa;
       margin-bottom: 1em;
     }
-
     .meta a {
       color: #4fc3f7;
       text-decoration: none;
     }
-
     .meta a:hover {
       text-decoration: underline;
     }
-
     .back {
       margin-top: 1em;
       display: inline-block;
@@ -56,16 +49,13 @@
       border-radius: 4px;
       text-decoration: none;
     }
-
     #comments {
       margin-top: 2em;
     }
-
     .comment {
       display: flex;
       margin-bottom: 1.2em;
     }
-
     .bubble {
       background: #2d2f44;
       padding: 0.8em 1em;
@@ -73,7 +63,6 @@
       max-width: 85%;
       position: relative;
     }
-
     .bubble::before {
       content: '';
       position: absolute;
@@ -82,29 +71,24 @@
       border: 8px solid transparent;
       border-right-color: #2d2f44;
     }
-
     .author {
       font-weight: bold;
       font-size: 0.9em;
     }
-
     .date {
       font-size: 0.75em;
       color: #aaa;
       margin-left: 0.5em;
     }
-
     .text {
       margin-top: 0.3em;
       font-size: 0.95em;
       white-space: pre-wrap;
       line-height: 1.5;
     }
-
     .quality-selector {
       margin: 1em 0;
     }
-
     .quality-selector select {
       padding: 0.3em;
       font-size: 1em;
@@ -129,11 +113,8 @@
   </div>
 
   <script>
-    const API_KEYS = [
-      'AIzaSyDIoREN7XZjtgEdmfmvuxvm2q_OAb2myMs'
-    ];
+    const API_KEYS = ['AIzaSyDIoREN7XZjtgEdmfmvuxvm2q_OAb2myMs'];
     let apiIndex = 0;
-
     const params = new URLSearchParams(window.location.search);
     const videoId = params.get('id');
     const videoEl = document.getElementById('video-player');
@@ -141,20 +122,15 @@
     const metaEl = document.getElementById('video-meta');
     const commentsEl = document.getElementById('comments');
     const qualitySelect = document.getElementById('quality-select');
+    let availableFormats = [];
 
     function getApiKey() {
       return apiIndex < API_KEYS.length ? API_KEYS[apiIndex] : null;
     }
 
-    function nextApiKey() {
-      apiIndex++;
-      return getApiKey();
-    }
-
     async function fetchWithRetry(url) {
       while (apiIndex < API_KEYS.length) {
-        const apiKey = API_KEYS[apiIndex];
-        const res = await fetch(url.replace('API_KEY', apiKey));
+        const res = await fetch(url.replace('API_KEY', getApiKey()));
         if (res.status === 403 || res.status === 400) {
           apiIndex++;
           continue;
@@ -179,41 +155,52 @@
         const res = await fetch(`/formats?videoId=${videoId}`);
         const formats = await res.json();
 
-        qualitySelect.innerHTML = '';
+        availableFormats = formats.filter(f => f.quality && f.itag);
+        availableFormats.sort((a, b) => parseInt(b.quality) - parseInt(a.quality));
 
-        formats.forEach(f => {
+        qualitySelect.innerHTML = '';
+        availableFormats.forEach(f => {
           const opt = document.createElement('option');
           opt.value = f.itag;
           opt.textContent = f.quality;
           qualitySelect.appendChild(opt);
         });
 
-        if (formats.length > 0) {
-          qualitySelect.value = formats[0].itag;
-          loadVideoWithItag(formats[0].itag);
+        if (availableFormats.length > 0) {
+          qualitySelect.value = availableFormats[0].itag;
+          loadVideoWithItag(availableFormats[0].itag);
         }
       } catch (err) {
-        console.error('画質の取得に失敗しました', err);
+        console.error('画質取得失敗:', err);
         titleEl.textContent = '動画の読み込みに失敗しました';
       }
     }
 
-    function loadVideoWithItag(itag) {
+    function loadVideoWithItag(itag, attempt = 0) {
+      if (!availableFormats.length) return;
+      const format = availableFormats.find(f => f.itag === itag);
+      if (!format) return;
+
+      videoEl.onerror = () => {
+        if (attempt + 1 < availableFormats.length) {
+          const next = availableFormats[attempt + 1];
+          qualitySelect.value = next.itag;
+          loadVideoWithItag(next.itag, attempt + 1);
+        } else {
+          titleEl.textContent = '動画の再生に失敗しました';
+        }
+      };
       videoEl.src = `/stream?videoId=${videoId}&itag=${itag}`;
     }
 
     qualitySelect.addEventListener('change', () => {
-      const selectedItag = qualitySelect.value;
-      loadVideoWithItag(selectedItag);
+      const itag = qualitySelect.value;
+      loadVideoWithItag(itag);
     });
 
     async function loadMetadata() {
       try {
         const data = await fetchWithRetry(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=API_KEY`);
-        if (!data.items || data.items.length === 0) {
-          titleEl.textContent = '動画が見つかりません';
-          return;
-        }
         const video = data.items[0];
         titleEl.textContent = video.snippet.title;
         metaEl.innerHTML = `<a href="channel.html?id=${video.snippet.channelId}">${video.snippet.channelTitle}</a> - ${new Date(video.snippet.publishedAt).toLocaleDateString()}`;
@@ -226,10 +213,6 @@
       try {
         const data = await fetchWithRetry(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=20&textFormat=plainText&key=API_KEY`);
         commentsEl.innerHTML = '';
-        if (!data.items || data.items.length === 0) {
-          commentsEl.innerHTML = '<p>コメントがありません。</p>';
-          return;
-        }
         data.items.forEach(item => {
           const c = item.snippet.topLevelComment.snippet;
           const div = document.createElement('div');
@@ -249,12 +232,6 @@
         commentsEl.innerHTML = '<p>コメントの取得に失敗しました。</p>';
         console.error(e);
       }
-    }
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('service-worker.js')
-        .then(() => console.log("Service Worker 登録成功"))
-        .catch(err => console.error("Service Worker 登録失敗:", err));
     }
   </script>
 </body>
