@@ -2,112 +2,32 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>Lentrance reader</title>
+  <title>Lentrance Reader</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#27293d" />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icon-192.png" />
   <style>
-    body {
-      font-family: sans-serif;
-      background: #1e1e2f;
-      color: #fff;
-      margin: 0;
-      padding: 1em;
-    }
-
-    .container {
-      max-width: 900px;
-      margin: auto;
-    }
-
-    video {
-      width: 100%;
-      height: 450px;
-      border-radius: 8px;
-      background: black;
-      outline: none;
-    }
-
-    .title {
-      font-size: 1.5em;
-      margin: 0.5em 0;
-    }
-
-    .meta {
-      color: #aaa;
-      margin-bottom: 1em;
-    }
-
-    .meta a {
-      color: #4fc3f7;
-      text-decoration: none;
-    }
-
-    .meta a:hover {
-      text-decoration: underline;
-    }
-
-    .back {
-      margin-top: 1em;
-      display: inline-block;
-      padding: 0.5em 1em;
-      background: #4caf50;
-      color: white;
-      border-radius: 4px;
-      text-decoration: none;
-    }
-
-    #comments {
-      margin-top: 2em;
-    }
-
-    .comment {
-      display: flex;
-      margin-bottom: 1.2em;
-    }
-
-    .bubble {
-      background: #2d2f44;
-      padding: 0.8em 1em;
-      border-radius: 16px;
-      max-width: 85%;
-      position: relative;
-    }
-
-    .bubble::before {
-      content: '';
-      position: absolute;
-      top: 10px;
-      left: -10px;
-      border: 8px solid transparent;
-      border-right-color: #2d2f44;
-    }
-
-    .author {
-      font-weight: bold;
-      font-size: 0.9em;
-    }
-
-    .date {
-      font-size: 0.75em;
-      color: #aaa;
-      margin-left: 0.5em;
-    }
-
-    .text {
-      margin-top: 0.3em;
-      font-size: 0.95em;
-      white-space: pre-wrap;
-      line-height: 1.5;
-    }
+    body { font-family: sans-serif; background: #1e1e2f; color: #fff; margin: 0; padding: 1em; }
+    .container { max-width: 900px; margin: auto; }
+    video { width: 100%; height: 450px; border-radius: 8px; background: black; outline: none; }
+    .title { font-size: 1.5em; margin: 0.5em 0; }
+    .meta { color: #aaa; margin-bottom: 1em; }
+    .meta a { color: #4fc3f7; text-decoration: none; }
+    .meta a:hover { text-decoration: underline; }
+    .back { margin-top: 1em; display: inline-block; padding: 0.5em 1em; background: #4caf50; color: white; border-radius: 4px; text-decoration: none; }
+    #comments { margin-top: 2em; }
+    .comment { display: flex; margin-bottom: 1.2em; }
+    .bubble { background: #2d2f44; padding: 0.8em 1em; border-radius: 16px; max-width: 85%; position: relative; }
+    .bubble::before { content: ''; position: absolute; top: 10px; left: -10px; border: 8px solid transparent; border-right-color: #2d2f44; }
+    .author { font-weight: bold; font-size: 0.9em; }
+    .date { font-size: 0.75em; color: #aaa; margin-left: 0.5em; }
+    .text { margin-top: 0.3em; font-size: 0.95em; white-space: pre-wrap; line-height: 1.5; }
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- 🎥 Expressサーバー配信動画を <video> で再生 -->
     <video id="video-player" controls autoplay muted></video>
-
     <div class="title" id="video-title">タイトル読み込み中...</div>
     <div class="meta" id="video-meta"></div>
     <a href="index.html" class="back">← 戻る</a>
@@ -116,27 +36,16 @@
     <div id="comments"><p>読み込み中...</p></div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
     const API_KEYS = [
-      'AIzaSyAHtZ0sgA9x7yBFnJO4pFTexhn4eQMa4iE',
-      'AIzaSyB61hHLbtWnXpUwGePHF47VTC1vFCfRUx0',
-      'AIzaSyByIBVpyf6HPLIrh5Rv49lN6Lre_LA0v68',
-      'AIzaSyDd_sQjAGvDtkL8JC4Z5C5V5k5uCfaKEW8',
-      'AIzaSyCyRNjwH_yPqiGPxpTm_F6JWgo2sEfiNzI',
-      'AIzaSyBgawf2kGHDh4hzFud7duAXN6RHT4R_ZaY',
-      'AIzaSyCyRNjwH_yPqiGPxpTm_F6JWgo2sEfiNzI',
-      'AIzaSyBmBkch1otJdpnCdbs3rTNGCUtBDvYj5Bs',
+      'YOUR_API_KEY_1',
+      'YOUR_API_KEY_2'
     ];
     let apiIndex = 0;
 
-    function getApiKey() {
-      return apiIndex < API_KEYS.length ? API_KEYS[apiIndex] : null;
-    }
-
-    function nextApiKey() {
-      apiIndex++;
-      return getApiKey();
-    }
+    function getApiKey() { return API_KEYS[apiIndex]; }
+    function nextApiKey() { apiIndex++; return getApiKey(); }
 
     const params = new URLSearchParams(window.location.search);
     const videoId = params.get('id');
@@ -151,10 +60,19 @@
     } else {
       loadVideoInfo();
       loadComments();
+      playHLS(`/video?id=${videoId}`);
+    }
 
-      // Expressサーバーの動画配信エンドポイントに差し替え
-      videoPlayer.src = `/video?id=${videoId}`;
-      videoPlayer.play().catch(() => {});
+    function playHLS(url) {
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(videoPlayer);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => videoPlayer.play());
+      } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+        videoPlayer.src = url;
+        videoPlayer.addEventListener('loadedmetadata', () => videoPlayer.play());
+      }
     }
 
     async function fetchWithRetry(url) {
@@ -214,13 +132,6 @@
         commentsEl.innerHTML = '<p>コメントの取得に失敗しました。</p>';
         console.error(e);
       }
-    }
-
-    // Service Worker登録（PWA対応）
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('service-worker.js')
-        .then(() => console.log("Service Worker 登録成功"))
-        .catch(err => console.error("Service Worker 登録失敗:", err));
     }
   </script>
 </body>
