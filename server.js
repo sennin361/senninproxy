@@ -1,55 +1,59 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
+const ytdl = require('ytdl-core');
+const ffmpeg = require('fluent-ffmpeg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 静的ファイル配信（index.htmlやwatch.htmlなどをpublicに置く想定）
+// 静的ファイル配信（publicフォルダ）
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 動画ストリーミングエンドポイント
-app.get('/video', (req, res) => {
+// HLS配信エンドポイント
+app.get('/video', async (req, res) => {
   const videoId = req.query.id;
-  if (!videoId) {
-    return res.status(400).send('動画IDが指定されていません');
+  if (!videoId || !ytdl.validateID(videoId)) {
+    return res.status(400).send('Invalid video ID');
   }
 
-  // ここでは videoId.mp4 のファイルを public/videos フォルダから配信すると仮定
-  const videoPath = path.join(__dirname, 'public', 'videos', `${videoId}.mp4`);
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  try {
+    const stream = ytdl(url, {
+      quality: 'highest',
+      filter: 'audioandvideo',
+      highWaterMark: 1 << 25
+    });
 
-  fs.stat(videoPath, (err, stats) => {
-    if (err) {
-      return res.status(404).send('動画が見つかりません');
-    }
+    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
 
-    const range = req.headers.range;
-    if (!range) {
-      // Rangeヘッダーがない場合、全体を送る（推奨はしない）
-      res.writeHead(200, {
-        'Content-Length': stats.size,
-        'Content-Type': 'video/mp4',
-      });
-      fs.createReadStream(videoPath).pipe(res);
-    } else {
-      // Rangeヘッダーを解釈して部分配信（動画ストリーミング用）
-      const parts = range.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : stats.size - 1;
-      const chunkSize = end - start + 1;
+    ffmpeg(stream)
+      .addOptions([
+        '-preset veryfast',
+        '-g 48',
+        '-sc_threshold 0',
+        '-map 0:v:0',
+        '-map 0:a:0',
+        '-c:v libx264',
+        '-c:a aac',
+        '-f hls',
+        '-hls_time 5',
+        '-hls_list_size 6',
+        '-hls_flags delete_segments',
+        '-hls_allow_cache 0'
+      ])
+      .outputFormat('hls')
+      .on('error', (err) => {
+        console.error('FFmpeg error:', err.message);
+        res.status(500).send('FFmpeg failed');
+      })
+      .pipe(res, { end: true });
 
-      const stream = fs.createReadStream(videoPath, { start, end });
-      res.writeHead(206, {
-        'Content-Range': `bytes ${start}-${end}/${stats.size}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunkSize,
-        'Content-Type': 'video/mp4',
-      });
-      stream.pipe(res);
-    }
-  });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Streaming failed');
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`✅ サーバー起動中: http://localhost:${PORT}`);
 });
