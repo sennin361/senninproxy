@@ -2,9 +2,10 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>仙人YouTubeビュアー</title>
+  <title>Lentrance Reader </title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#27293d" />
+  <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icon-192.png" />
   <style>
     body {
@@ -89,8 +90,8 @@
 </head>
 <body>
   <div class="container">
-    <!-- 🎥 動画プレーヤー -->
-    <video id="player" controls autoplay></video>
+    <!-- 🎥 HTML5 video player -->
+    <video id="video-player" controls autoplay></video>
 
     <div class="title" id="video-title">タイトル読み込み中...</div>
     <div class="meta" id="video-meta"></div>
@@ -102,15 +103,15 @@
 
   <script>
     const params = new URLSearchParams(window.location.search);
-    const videoId = params.get('v');
-    const player = document.getElementById('player');
+    const videoId = params.get('id');
+    const videoEl = document.getElementById('video-player');
     const titleEl = document.getElementById('video-title');
     const metaEl = document.getElementById('video-meta');
     const commentsEl = document.getElementById('comments');
 
     if (!videoId) {
       titleEl.textContent = '無効な動画IDです';
-      player.style.display = 'none';
+      videoEl.style.display = 'none';
     } else {
       loadVideo();
       loadComments();
@@ -119,24 +120,27 @@
     async function loadVideo() {
       try {
         const res = await fetch(`/api/stream/${videoId}`);
+        if (!res.ok) throw new Error('動画情報取得失敗');
         const data = await res.json();
-        if (!data.url) throw new Error("動画URLなし");
 
-        player.src = data.url;
-        titleEl.textContent = data.title;
-        metaEl.innerHTML = `${data.author}`;
-      } catch (err) {
-        titleEl.textContent = "動画取得エラー";
-        console.error(err);
+        titleEl.textContent = data.title || '無題';
+        metaEl.innerHTML = `${data.author || 'Unknown'} - ${new Date().toLocaleDateString()}`;
+        videoEl.src = data.url;
+      } catch (e) {
+        titleEl.textContent = '動画の取得に失敗しました';
+        videoEl.style.display = 'none';
+        console.error(e);
       }
     }
 
     async function loadComments() {
       try {
         const res = await fetch(`/api/comments/${videoId}`);
+        if (!res.ok) throw new Error('コメント取得失敗');
         const data = await res.json();
+
         commentsEl.innerHTML = '';
-        if (!data || !data.length) {
+        if (!data || data.length === 0) {
           commentsEl.innerHTML = '<p>コメントがありません。</p>';
           return;
         }
@@ -146,18 +150,25 @@
           div.innerHTML = `
             <div class="bubble">
               <div>
-                <span class="author">${c.author || "匿名"}</span>
-                <span class="date">${c.published || ""}</span>
+                <span class="author">${c.author}</span>
+                <span class="date">${c.date}</span>
               </div>
-              <div class="text">${c.text || ""}</div>
+              <div class="text">${c.text}</div>
             </div>
           `;
           commentsEl.appendChild(div);
         });
-      } catch (err) {
-        commentsEl.innerHTML = '<p>コメント取得エラー</p>';
-        console.error(err);
+      } catch (e) {
+        commentsEl.innerHTML = '<p>コメントの取得に失敗しました。</p>';
+        console.error(e);
       }
+    }
+
+    // PWA対応（必要なら）
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(() => console.log("Service Worker 登録成功"))
+        .catch(err => console.error("Service Worker 登録失敗:", err));
     }
   </script>
 </body>
