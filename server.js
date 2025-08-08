@@ -1,122 +1,90 @@
 "use strict";
 
-// ============================
-// 必要なモジュール読み込み
-// ============================
 const express = require("express");
 const path = require("path");
+const cors = require("cors");
 const compression = require("compression");
-const { Innertube } = require("youtubei.js");
+const bodyParser = require("body-parser");
 
-// ============================
-// アプリ初期化
-// ============================
+const youtube = require("./server/youtube.js"); // YouTube処理用自作モジュール
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ============================
-// YouTubeクライアント
-// ============================
-let youtubeClient = null;
+app.use(cors());
+app.use(compression());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, "public")));
 
-/**
- * YouTubeクライアント初期化
- */
-async function initYouTubeClient() {
-  if (!youtubeClient) {
-    try {
-      youtubeClient = await Innertube.create();
-      console.log("✅ YouTube client initialized");
-    } catch (err) {
-      console.error("❌ YouTube client initialization failed:", err);
-      throw new Error("YouTube client init error");
+// API: 動画ストリーム情報取得
+app.get("/api/stream/:id", async (req, res) => {
+  const videoId = req.params.id;
+  if (!videoId) {
+    return res.status(400).json({ error: "動画IDが指定されていません。" });
+  }
+  try {
+    const streamData = await youtube.getStream(videoId);
+    if (!streamData || !streamData.url) {
+      return res.status(404).json({ error: "動画ストリームが見つかりません。" });
     }
-  }
-}
-
-/**
- * 動画情報取得
- */
-async function getVideoInfo(videoId) {
-  await initYouTubeClient();
-  try {
-    const info = await youtubeClient.getInfo(videoId);
-    return {
-      title: info.basic_info?.title || "無題",
-      author: info.basic_info?.author || "不明",
-      description: info.basic_info?.short_description || "",
-      url: info.streaming_data?.formats?.[0]?.url || null,
-      formats: info.streaming_data?.formats || [],
-      adaptiveFormats: info.streaming_data?.adaptive_formats || []
-    };
-  } catch (err) {
-    console.error("動画情報取得エラー:", err);
-    throw err;
-  }
-}
-
-/**
- * コメント取得
- */
-async function getComments(videoId) {
-  await initYouTubeClient();
-  try {
-    const thread = await youtubeClient.getComments(videoId);
-    return thread.comments.map(c => ({
-      author: c.author?.name || "匿名",
-      text: c.content?.text || "",
-      published: c.published
-    }));
-  } catch (err) {
-    console.error("コメント取得エラー:", err);
-    throw err;
-  }
-}
-
-// ============================
-// ミドルウェア設定
-// ============================
-app.use(compression()); // レスポンス圧縮
-app.use(express.json()); // JSONボディパース
-app.use(express.static(path.join(__dirname, "public"))); // publicフォルダ配信
-
-// ============================
-// APIルート
-// ============================
-/**
- * 動画情報API
- */
-app.get("/api/video/:id", async (req, res) => {
-  try {
-    const data = await getVideoInfo(req.params.id);
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: "動画情報の取得に失敗しました" });
+    res.json({
+      title: streamData.title,
+      author: streamData.author,
+      url: streamData.url,
+    });
+  } catch (error) {
+    console.error("動画ストリーム取得失敗:", error);
+    res.status(500).json({ error: "動画の取得に失敗しました。" });
   }
 });
 
-/**
- * コメントAPI
- */
+// API: コメント取得
 app.get("/api/comments/:id", async (req, res) => {
+  const videoId = req.params.id;
+  if (!videoId) {
+    return res.status(400).json([]);
+  }
   try {
-    const comments = await getComments(req.params.id);
+    const commentsRaw = await youtube.getComments(videoId);
+    // コメントの形式は自作youtube.jsの仕様に応じて変えてください
+    const comments = (commentsRaw?.comments || []).map((c) => ({
+      author: c.author.name,
+      date: new Date(c.publishedAt).toLocaleString(),
+      text: c.text,
+    }));
     res.json(comments);
-  } catch (err) {
-    res.status(500).json({ error: "コメントの取得に失敗しました" });
+  } catch (error) {
+    console.error("コメント取得失敗:", error);
+    res.status(500).json([]);
   }
 });
 
-// ============================
-// ルートアクセス時 index.html 表示
-// ============================
+// ルート（トップ）で index.html を返す
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// ============================
-// サーバー起動
-// ============================
-app.listen(PORT, () => {
-  console.log(`🚀 サーバー起動: http://localhost:${PORT}`);
+// それ以外は404エラー
+app.use((req, res) => {
+  res.status(404).send("404 Not Found");
 });
+
+// サーバ起動時に YouTubeクライアントを初期化
+async function init() {
+  try {
+    // youtube.js内で YouTube APIクライアント初期化処理を行う場合はここで呼び出すなど
+    // 例: await youtube.initClient();
+
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  } catch (e) {
+    console.error("初期化失敗:", e);
+    setTimeout(init, 10000);
+  }
+}
+
+init();
+
+module.exports = app;
