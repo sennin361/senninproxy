@@ -1,14 +1,17 @@
 {
-  "name": "lentrance-video-server",
+  "name": "youtube-hls-viewer",
   "version": "1.0.0",
-  "description": "動画ストリーミング対応のExpressサーバー",
+  "description": "YouTube動画をHLS変換して再生するNode.js + Expressサーバー",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "author": "あなたの名前",
-  "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "ytdl-core": "^4.12.1",
+    "fluent-ffmpeg": "^2.1.2"
+  },
+  "engines": {
+    "node": ">=18.x"
   }
 }
