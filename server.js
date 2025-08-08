@@ -5,93 +5,112 @@ const path = require("path");
 const compression = require("compression");
 const bodyParser = require("body-parser");
 const YouTubeJS = require("youtubei.js");
+const serverYt = require("./server/youtube.js");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 
-// ==== アプリ設定 ====
-const app = express();
-let client; // YouTube APIクライアント
+let app = express();
+let client = null;
 
+// ミドルウェア
 app.use(compression());
-app.use(cors());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-app.use(cookieParser());
-app.set("trust proxy", 1);
-
-// 静的ファイル
-app.use(express.static(path.join(__dirname, "public")));
-
-// EJSテンプレート設定
+app.use(express.static(path.join(__dirname, "public"))); // public フォルダを静的配信
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cors());
+app.set("trust proxy", 1);
+app.use(cookieParser());
 
-// ==== ログインチェック（必要な場合） ====
-app.use((req, res, next) => {
-  if (
-    req.cookies.loginok !== "ok" &&
-    !req.path.includes("login") &&
-    !req.path.includes("back")
-  ) {
-    return res.redirect("/login");
-  }
-  next();
-});
+// 強制ログインチェックは削除（login.html不要化）
+// app.use((req, res, next) => { ... });
 
-// ==== ルーティング ====
+// "/" にアクセスしたら public/index.html を返す
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.get("/login", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "login.html"));
-});
-
-// 動画視聴
-app.get("/watch", (req, res) => {
-  const videoId = req.query.v;
-  if (!videoId) return res.status(400).send("動画IDが必要です");
-  res.sendFile(path.join(__dirname, "public", "watch.html"));
-});
-
-// 動画データAPI（仙人ビュアー用）
-app.get("/api/video/:id", async (req, res) => {
+// 動画ストリーム取得API
+app.get("/api/stream/:id", async (req, res) => {
+  const id = req.params.id;
   try {
-    const videoId = req.params.id;
-    const info = await client.getInfo(videoId);
-    res.json(info);
+    const streamData = await serverYt.getStream(id);
+    res.json(streamData);
   } catch (err) {
-    console.error("動画情報取得エラー:", err.message);
-    res.status(500).json({ error: "動画情報取得に失敗しました" });
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch stream" });
   }
 });
 
-// ==== 404ページ ====
-app.use((req, res) => {
-  res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
+// 動画情報取得API
+app.get("/api/info/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    const info = await serverYt.infoGet(id);
+    res.json(info);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch info" });
+  }
 });
 
-// ==== YouTube API初期化 ====
+// 検索API
+app.get("/api/search", async (req, res) => {
+  const q = req.query.q;
+  try {
+    const results = await serverYt.search(q);
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to search" });
+  }
+});
+
+// チャンネル情報取得API
+app.get("/api/channel/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    const results = await serverYt.getChannel(id);
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to get channel" });
+  }
+});
+
+// コメント取得API
+app.get("/api/comments/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    const results = await serverYt.getComments(id);
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to get comments" });
+  }
+});
+
+// 404ハンドラー
+app.use((req, res) => {
+  res.status(404).send("404 Not Found");
+});
+
+app.on("error", console.error);
+
+// YouTubeクライアント初期化
 async function initInnerTube() {
   try {
-    client = await YouTubeJS.Innertube.create({
-      lang: "ja",
-      location: "JP",
-    });
-    console.log("YouTubeクライアント初期化成功");
+    client = await YouTubeJS.Innertube.create({ lang: "ja", location: "JP" });
+    serverYt.setClient(client);
 
-    const port = process.env.PORT || 3000;
-    app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
+    const listener = app.listen(process.env.PORT || 3000, () => {
+      console.log(process.pid, "Ready.", listener.address().port);
     });
-  } catch (err) {
-    console.error("YouTubeクライアント初期化失敗:", err.message);
+  } catch (e) {
+    console.error("YouTubeクライアント初期化失敗:", e);
     setTimeout(initInnerTube, 10000); // 10秒後に再試行
   }
 }
 
-process.on("unhandledRejection", (err) => {
-  console.error("未処理のPromise拒否:", err);
-});
-
+process.on("unhandledRejection", console.error);
 initInnerTube();
