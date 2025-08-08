@@ -1,14 +1,12 @@
 services:
   - type: web
-    name: youtube-hls-viewer
+    name: lentrance-reader
     env: node
     plan: free
-    buildCommand: |
-      apt-get update && apt-get install -y ffmpeg
-      npm install
+    region: oregon
+    buildCommand: npm install
     startCommand: npm start
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
-    branch: main
-    autoDeploy: true
