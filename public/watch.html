@@ -2,29 +2,96 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>Lentrance Reader</title>
+  <title>仙人YouTubeビュアー</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#27293d" />
+  <link rel="icon" href="icon-192.png" />
   <style>
-    body { font-family: sans-serif; background: #1e1e2f; color: #fff; margin: 0; padding: 1em; }
-    .container { max-width: 900px; margin: auto; }
-    video { width: 100%; height: 450px; border-radius: 8px; background: black; outline: none; }
-    .title { font-size: 1.5em; margin: 0.5em 0; }
-    .meta { color: #aaa; margin-bottom: 1em; }
-    .meta a { color: #4fc3f7; text-decoration: none; }
-    .meta a:hover { text-decoration: underline; }
-    .back { margin-top: 1em; display: inline-block; padding: 0.5em 1em; background: #4caf50; color: white; border-radius: 4px; text-decoration: none; }
-    #comments { margin-top: 2em; }
-    .comment { display: flex; margin-bottom: 1.2em; }
-    .bubble { background: #2d2f44; padding: 0.8em 1em; border-radius: 16px; max-width: 85%; position: relative; }
-    .bubble::before { content: ''; position: absolute; top: 10px; left: -10px; border: 8px solid transparent; border-right-color: #2d2f44; }
-    .author { font-weight: bold; font-size: 0.9em; }
-    .date { font-size: 0.75em; color: #aaa; margin-left: 0.5em; }
-    .text { margin-top: 0.3em; font-size: 0.95em; white-space: pre-wrap; line-height: 1.5; }
+    body {
+      font-family: sans-serif;
+      background: #1e1e2f;
+      color: #fff;
+      margin: 0;
+      padding: 1em;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+    }
+    video {
+      width: 100%;
+      height: 450px;
+      border-radius: 8px;
+      background: black;
+    }
+    .title {
+      font-size: 1.5em;
+      margin: 0.5em 0;
+    }
+    .meta {
+      color: #aaa;
+      margin-bottom: 1em;
+    }
+    .meta a {
+      color: #4fc3f7;
+      text-decoration: none;
+    }
+    .meta a:hover {
+      text-decoration: underline;
+    }
+    .back {
+      margin-top: 1em;
+      display: inline-block;
+      padding: 0.5em 1em;
+      background: #4caf50;
+      color: white;
+      border-radius: 4px;
+      text-decoration: none;
+    }
+    #comments {
+      margin-top: 2em;
+    }
+    .comment {
+      display: flex;
+      margin-bottom: 1.2em;
+    }
+    .bubble {
+      background: #2d2f44;
+      padding: 0.8em 1em;
+      border-radius: 16px;
+      max-width: 85%;
+      position: relative;
+    }
+    .bubble::before {
+      content: '';
+      position: absolute;
+      top: 10px;
+      left: -10px;
+      border: 8px solid transparent;
+      border-right-color: #2d2f44;
+    }
+    .author {
+      font-weight: bold;
+      font-size: 0.9em;
+    }
+    .date {
+      font-size: 0.75em;
+      color: #aaa;
+      margin-left: 0.5em;
+    }
+    .text {
+      margin-top: 0.3em;
+      font-size: 0.95em;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <video id="video-player" controls autoplay muted></video>
+    <!-- 🎥 動画プレーヤー -->
+    <video id="player" controls autoplay></video>
+
     <div class="title" id="video-title">タイトル読み込み中...</div>
     <div class="meta" id="video-meta"></div>
     <a href="index.html" class="back">← 戻る</a>
@@ -33,108 +100,63 @@
     <div id="comments"><p>読み込み中...</p></div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
-    // YouTube Data APIキーをここにセットしてください（複数用意するとAPI制限回避できます）
-    const API_KEYS = [
-      'AIzaSyC4XybnrxJv3ItGZEuxQMlNU6-z-LZyxFE',
-      'AIzaSyDLW4ADM18tbAr15aqK21bsYn7aQKJNZRg'
-    ];
-    let apiIndex = 0;
-
-    function getApiKey() { return API_KEYS[apiIndex]; }
-    function nextApiKey() { apiIndex++; return getApiKey(); }
-
     const params = new URLSearchParams(window.location.search);
-    const videoId = params.get('id');
-    const videoPlayer = document.getElementById('video-player');
+    const videoId = params.get('v');
+    const player = document.getElementById('player');
     const titleEl = document.getElementById('video-title');
     const metaEl = document.getElementById('video-meta');
     const commentsEl = document.getElementById('comments');
 
     if (!videoId) {
       titleEl.textContent = '無効な動画IDです';
-      videoPlayer.style.display = 'none';
+      player.style.display = 'none';
     } else {
-      playHLS(`/video?id=${videoId}`);
-      loadVideoInfo();
+      loadVideo();
       loadComments();
     }
 
-    function playHLS(url) {
-      if (Hls.isSupported()) {
-        const hls = new Hls();
-        hls.loadSource(url);
-        hls.attachMedia(videoPlayer);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => videoPlayer.play());
-      } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-        videoPlayer.src = url;
-        videoPlayer.addEventListener('loadedmetadata', () => videoPlayer.play());
-      } else {
-        titleEl.textContent = 'HLS非対応のブラウザです';
-      }
-    }
-
-    async function fetchWithRetry(url) {
-      while (apiIndex < API_KEYS.length) {
-        const apiKey = API_KEYS[apiIndex];
-        try {
-          const res = await fetch(url.replace('API_KEY', apiKey));
-          if (res.status === 403 || res.status === 400) {
-            apiIndex++;
-            continue;
-          }
-          if (!res.ok) throw new Error('APIエラー');
-          return await res.json();
-        } catch {
-          apiIndex++;
-          continue;
-        }
-      }
-      throw new Error('APIキーの上限に達しました');
-    }
-
-    async function loadVideoInfo() {
+    async function loadVideo() {
       try {
-        const data = await fetchWithRetry(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=API_KEY`);
-        if (!data.items || data.items.length === 0) {
-          titleEl.textContent = '動画が見つかりません';
-          videoPlayer.style.display = 'none';
-          return;
-        }
-        const video = data.items[0];
-        titleEl.textContent = video.snippet.title;
-        metaEl.innerHTML = `<a href="channel.html?id=${video.snippet.channelId}">${video.snippet.channelTitle}</a> - ${new Date(video.snippet.publishedAt).toLocaleDateString()}`;
-      } catch {
-        titleEl.textContent = '動画情報の取得に失敗しました。';
+        const res = await fetch(`/api/stream/${videoId}`);
+        const data = await res.json();
+        if (!data.url) throw new Error("動画URLなし");
+
+        player.src = data.url;
+        titleEl.textContent = data.title;
+        metaEl.innerHTML = `${data.author}`;
+      } catch (err) {
+        titleEl.textContent = "動画取得エラー";
+        console.error(err);
       }
     }
 
     async function loadComments() {
       try {
-        const data = await fetchWithRetry(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=20&textFormat=plainText&key=API_KEY`);
+        const res = await fetch(`/api/comments/${videoId}`);
+        const data = await res.json();
         commentsEl.innerHTML = '';
-        if (!data.items || data.items.length === 0) {
+        if (!data || !data.length) {
           commentsEl.innerHTML = '<p>コメントがありません。</p>';
           return;
         }
-        data.items.forEach(item => {
-          const c = item.snippet.topLevelComment.snippet;
+        data.forEach(c => {
           const div = document.createElement('div');
           div.className = 'comment';
           div.innerHTML = `
             <div class="bubble">
               <div>
-                <span class="author">${c.authorDisplayName}</span>
-                <span class="date">${new Date(c.publishedAt).toLocaleString()}</span>
+                <span class="author">${c.author || "匿名"}</span>
+                <span class="date">${c.published || ""}</span>
               </div>
-              <div class="text">${c.textDisplay}</div>
+              <div class="text">${c.text || ""}</div>
             </div>
           `;
           commentsEl.appendChild(div);
         });
-      } catch {
-        commentsEl.innerHTML = '<p>コメントの取得に失敗しました。</p>';
+      } catch (err) {
+        commentsEl.innerHTML = '<p>コメント取得エラー</p>';
+        console.error(err);
       }
     }
   </script>
