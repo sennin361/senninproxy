@@ -1,31 +1,24 @@
 {
-  "name": "lentrance-reader",
+  "name": "sennin-youtube-viewer",
   "version": "1.0.0",
-  "description": "YouTube HLS streaming server with Express",
+  "description": "仙人YouTubeビュアー - Node.js + Express + youtubei.js ベースの動画ビューア",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
-  "keywords": [
-    "youtube",
-    "streaming",
-    "express",
-    "hls"
-  ],
-  "author": "Your Name",
+  "author": "あなたの名前",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "ytdl-core": "^4.11.0",
+    "body-parser": "^1.20.2",
+    "compression": "^1.7.4",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
-    "fluent-ffmpeg": "^2.1.2",
-    "miniget": "^3.0.3"
+    "ejs": "^3.1.9",
+    "express": "^4.19.2",
+    "youtubei.js": "^7.0.1"
   },
   "devDependencies": {
-    "nodemon": "^2.0.22"
-  },
-  "engines": {
-    "node": ">=16"
+    "nodemon": "^3.1.0"
   }
 }
