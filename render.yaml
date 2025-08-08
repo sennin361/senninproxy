@@ -1,10 +1,15 @@
 services:
   - type: web
-    name: sennin-youtube-viewer
+    name: youtube-viewer
     env: node
-    plan: free
+    region: oregon
+    plan: starter
     buildCommand: "npm install"
     startCommand: "npm start"
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
+      # もし必要ならAPIキーや他の環境変数をここに追加してください
+      # - key: YOUTUBE_API_KEY
+      #   value: your_api_key_here
