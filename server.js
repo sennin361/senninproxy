@@ -6,7 +6,7 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 静的ファイル配信(publicフォルダにwatch.htmlなどを配置)
+// 静的ファイルをpublicフォルダから提供
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/video', (req, res) => {
@@ -18,45 +18,41 @@ app.get('/video', (req, res) => {
 
   const videoURL = `https://www.youtube.com/watch?v=${videoId}`;
 
+  // HLS (m3u8) コンテンツタイプ
   res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
   res.setHeader('Cache-Control', 'no-cache');
 
-  try {
-    const stream = ytdl(videoURL, {
-      quality: 'highest',
-      filter: (format) => format.container === 'mp4' && format.hasAudio && format.hasVideo,
-      highWaterMark: 1 << 25,
-    });
+  // YouTubeから動画をダウンロード (最高画質のmp4形式)
+  const stream = ytdl(videoURL, {
+    quality: 'highest',
+    filter: format => format.container === 'mp4' && format.hasAudio && format.hasVideo,
+    highWaterMark: 1 << 25,
+  });
 
-    ffmpeg(stream)
-      .addOptions([
-        '-preset veryfast',
-        '-g 48',
-        '-sc_threshold 0',
-        '-hls_time 6',
-        '-hls_list_size 5',
-        '-hls_flags delete_segments+temp_file',
-        '-hls_allow_cache 0',
-        '-hls_segment_type mpegts',
-        '-start_number 0',
-      ])
-      .format('hls')
-      .on('start', (cmd) => {
-        console.log('FFmpeg start:', cmd);
-      })
-      .on('error', (err) => {
-        console.error('FFmpeg error:', err);
-        if (!res.headersSent) {
-          res.status(500).send('FFmpeg error');
-        }
-      })
-      .pipe(res, { end: true });
-  } catch (e) {
-    console.error('Error:', e);
-    if (!res.headersSent) {
-      res.status(500).send('Server error');
-    }
-  }
+  // ffmpegでHLS変換してリアルタイム配信
+  ffmpeg(stream)
+    .addOptions([
+      '-preset veryfast',       // エンコード速度優先
+      '-g 48',                 // GOPサイズ（2秒間隔、fps=24として）
+      '-sc_threshold 0',       // シーンカット検出OFF
+      '-hls_time 6',           // セグメント長6秒
+      '-hls_list_size 5',      // プレイリスト内の最大セグメント数
+      '-hls_flags delete_segments+temp_file', // 古いセグメント削除
+      '-hls_allow_cache 0',    // キャッシュ禁止
+      '-hls_segment_type mpegts', // セグメントタイプ
+      '-start_number 0',       // セグメント番号開始
+    ])
+    .format('hls')
+    .on('start', commandLine => {
+      console.log('FFmpeg start:', commandLine);
+    })
+    .on('error', err => {
+      console.error('FFmpeg error:', err);
+      if (!res.headersSent) {
+        res.status(500).send('FFmpeg error');
+      }
+    })
+    .pipe(res, { end: true });
 });
 
 app.listen(PORT, () => {
