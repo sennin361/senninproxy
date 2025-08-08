@@ -2,50 +2,30 @@ const express = require('express');
 const ytdl = require('ytdl-core');
 const ffmpeg = require('fluent-ffmpeg');
 const path = require('path');
-const fs = require('fs');
-const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// public 配下を静的配信
+// 静的ファイル配信(publicフォルダにwatch.htmlなどを配置)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 一時HLS出力ディレクトリ
-const TEMP_DIR = path.join(__dirname, 'temp_hls');
-if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
-
-// 古いHLSファイル削除
-function cleanupOldHLS() {
-  fs.readdir(TEMP_DIR, (err, files) => {
-    if (err) return;
-    const now = Date.now();
-    files.forEach(folder => {
-      const fullPath = path.join(TEMP_DIR, folder);
-      fs.stat(fullPath, (err, stats) => {
-        if (!err && stats.isDirectory() && now - stats.ctimeMs > 10 * 60 * 1000) {
-          fs.rm(fullPath, { recursive: true, force: true }, () => {});
-        }
-      });
-    });
-  });
-}
-setInterval(cleanupOldHLS, 5 * 60 * 1000);
-
-// HLS変換 & 配信
-app.get('/video', async (req, res) => {
+app.get('/video', (req, res) => {
   const videoId = req.query.id;
-  if (!videoId) return res.status(400).send('Missing video ID');
+  if (!videoId) {
+    res.status(400).send('Missing video id');
+    return;
+  }
 
-  const sessionId = crypto.randomBytes(8).toString('hex');
-  const sessionDir = path.join(TEMP_DIR, sessionId);
-  fs.mkdirSync(sessionDir);
+  const videoURL = `https://www.youtube.com/watch?v=${videoId}`;
+
+  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+  res.setHeader('Cache-Control', 'no-cache');
 
   try {
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const stream = ytdl(url, {
+    const stream = ytdl(videoURL, {
       quality: 'highest',
-      highWaterMark: 1 << 25
+      filter: (format) => format.container === 'mp4' && format.hasAudio && format.hasVideo,
+      highWaterMark: 1 << 25,
     });
 
     ffmpeg(stream)
@@ -54,30 +34,31 @@ app.get('/video', async (req, res) => {
         '-g 48',
         '-sc_threshold 0',
         '-hls_time 6',
-        '-hls_playlist_type vod',
-        `-hls_segment_filename ${path.join(sessionDir, 'segment_%03d.ts')}`
+        '-hls_list_size 5',
+        '-hls_flags delete_segments+temp_file',
+        '-hls_allow_cache 0',
+        '-hls_segment_type mpegts',
+        '-start_number 0',
       ])
-      .output(path.join(sessionDir, 'playlist.m3u8'))
-      .on('end', () => {
-        console.log(`[HLS] Generated for ${videoId}`);
+      .format('hls')
+      .on('start', (cmd) => {
+        console.log('FFmpeg start:', cmd);
       })
-      .on('error', err => {
-        console.error('[ffmpeg error]', err);
-        if (!res.headersSent) res.status(500).send('ffmpeg error');
+      .on('error', (err) => {
+        console.error('FFmpeg error:', err);
+        if (!res.headersSent) {
+          res.status(500).send('FFmpeg error');
+        }
       })
-      .run();
-
-    // 生成した m3u8 へリダイレクト
-    res.redirect(`/hls/${sessionId}/playlist.m3u8`);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Video processing error');
+      .pipe(res, { end: true });
+  } catch (e) {
+    console.error('Error:', e);
+    if (!res.headersSent) {
+      res.status(500).send('Server error');
+    }
   }
 });
 
-// HLS配信
-app.use('/hls', express.static(TEMP_DIR));
-
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Server listening on http://localhost:${PORT}`);
 });
