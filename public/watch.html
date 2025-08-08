@@ -35,9 +35,10 @@
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
+    // YouTube Data APIキーをここにセットしてください（複数用意するとAPI制限回避できます）
     const API_KEYS = [
-      'AIzaSyC4XybnrxJv3ItGZEuxQMlNU6-z-LZyxFE',
-      'YOUR_YOUTUBE_DATA_API_KEY_2'
+      'YOUR_API_KEY_1',
+      'YOUR_API_KEY_2'
     ];
     let apiIndex = 0;
 
@@ -103,7 +104,7 @@
         }
         const video = data.items[0];
         titleEl.textContent = video.snippet.title;
-        metaEl.innerHTML = `<a href="channel.html?id=${video.snippet.channelId}" target="_blank" rel="noopener noreferrer">${video.snippet.channelTitle}</a> - ${new Date(video.snippet.publishedAt).toLocaleDateString()}`;
+        metaEl.innerHTML = `<a href="channel.html?id=${video.snippet.channelId}">${video.snippet.channelTitle}</a> - ${new Date(video.snippet.publishedAt).toLocaleDateString()}`;
       } catch {
         titleEl.textContent = '動画情報の取得に失敗しました。';
       }
@@ -124,10 +125,10 @@
           div.innerHTML = `
             <div class="bubble">
               <div>
-                <span class="author">${escapeHtml(c.authorDisplayName)}</span>
+                <span class="author">${c.authorDisplayName}</span>
                 <span class="date">${new Date(c.publishedAt).toLocaleString()}</span>
               </div>
-              <div class="text">${escapeHtml(c.textDisplay)}</div>
+              <div class="text">${c.textDisplay}</div>
             </div>
           `;
           commentsEl.appendChild(div);
@@ -135,21 +136,6 @@
       } catch {
         commentsEl.innerHTML = '<p>コメントの取得に失敗しました。</p>';
       }
-    }
-
-    // XSS対策に簡易エスケープ関数
-    function escapeHtml(text) {
-      if (!text) return '';
-      return text.replace(/[&<>"']/g, (m) => {
-        switch(m) {
-          case '&': return '&amp;';
-          case '<': return '&lt;';
-          case '>': return '&gt;';
-          case '"': return '&quot;';
-          case '\'': return '&#39;';
-          default: return m;
-        }
-      });
     }
   </script>
 </body>
