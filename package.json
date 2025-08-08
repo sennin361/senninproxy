@@ -13,5 +13,14 @@
   },
   "engines": {
     "node": ">=18.x"
-  }
+  },
+  "keywords": [
+    "youtube",
+    "hls",
+    "express",
+    "ffmpeg",
+    "video-streaming"
+  ],
+  "author": "",
+  "license": "MIT"
 }
