@@ -1,26 +1,16 @@
 {
-  "name": "youtube-hls-viewer",
+  "name": "lentrance-reader",
   "version": "1.0.0",
-  "description": "YouTube動画をHLS変換して再生するNode.js + Expressサーバー",
+  "description": "YouTube動画のリアルタイムHLS配信サーバー＆プレイヤー",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
+  "author": "あなたの名前",
+  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
-    "ytdl-core": "^4.11.5",
-    "fluent-ffmpeg": "^2.1.2"
-  },
-  "engines": {
-    "node": ">=18.x"
-  },
-  "keywords": [
-    "youtube",
-    "hls",
-    "express",
-    "ffmpeg",
-    "video-streaming"
-  ],
-  "author": "",
-  "license": "MIT"
+    "fluent-ffmpeg": "^2.1.2",
+    "ytdl-core": "^4.11.0"
+  }
 }
