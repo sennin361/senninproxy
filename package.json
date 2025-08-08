@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js"
   },
-  "author": "あなたの名前",
+  "author": "sennin",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
