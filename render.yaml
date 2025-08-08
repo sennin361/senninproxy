@@ -1,12 +1,10 @@
 services:
   - type: web
-    name: lentrance-reader
+    name: sennin-youtube-viewer
     env: node
     plan: free
-    region: oregon
-    buildCommand: npm install
-    startCommand: npm start
-    autoDeploy: true
+    buildCommand: "npm install"
+    startCommand: "npm start"
     envVars:
       - key: NODE_ENV
         value: production
