@@ -4,9 +4,6 @@
   <meta charset="UTF-8" />
   <title>Lentrance Reader</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#27293d" />
-  <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="icon-192.png" />
   <style>
     body { font-family: sans-serif; background: #1e1e2f; color: #fff; margin: 0; padding: 1em; }
     .container { max-width: 900px; margin: auto; }
@@ -39,8 +36,8 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
     const API_KEYS = [
-      'AIzaSyDIoREN7XZjtgEdmfmvuxvm2q_OAb2myMs',
-      'AIzaSyC4XybnrxJv3ItGZEuxQMlNU6-z-LZyxFE'
+      'YOUR_YOUTUBE_DATA_API_KEY_1',
+      'YOUR_YOUTUBE_DATA_API_KEY_2'
     ];
     let apiIndex = 0;
 
@@ -58,9 +55,9 @@
       titleEl.textContent = '無効な動画IDです';
       videoPlayer.style.display = 'none';
     } else {
+      playHLS(`/video?id=${videoId}`);
       loadVideoInfo();
       loadComments();
-      playHLS(`/video?id=${videoId}`);
     }
 
     function playHLS(url) {
@@ -72,19 +69,26 @@
       } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
         videoPlayer.src = url;
         videoPlayer.addEventListener('loadedmetadata', () => videoPlayer.play());
+      } else {
+        titleEl.textContent = 'HLS非対応のブラウザです';
       }
     }
 
     async function fetchWithRetry(url) {
       while (apiIndex < API_KEYS.length) {
         const apiKey = API_KEYS[apiIndex];
-        const res = await fetch(url.replace('API_KEY', apiKey));
-        if (res.status === 403 || res.status === 400) {
+        try {
+          const res = await fetch(url.replace('API_KEY', apiKey));
+          if (res.status === 403 || res.status === 400) {
+            apiIndex++;
+            continue;
+          }
+          if (!res.ok) throw new Error('APIエラー');
+          return await res.json();
+        } catch {
           apiIndex++;
           continue;
         }
-        if (!res.ok) throw new Error('APIエラー');
-        return res.json();
       }
       throw new Error('APIキーの上限に達しました');
     }
@@ -99,9 +103,9 @@
         }
         const video = data.items[0];
         titleEl.textContent = video.snippet.title;
-        metaEl.innerHTML = `<a href="channel.html?id=${video.snippet.channelId}">${video.snippet.channelTitle}</a> - ${new Date(video.snippet.publishedAt).toLocaleDateString()}`;
-      } catch (e) {
-        alert('動画情報の取得に失敗しました。');
+        metaEl.innerHTML = `<a href="channel.html?id=${video.snippet.channelId}" target="_blank" rel="noopener noreferrer">${video.snippet.channelTitle}</a> - ${new Date(video.snippet.publishedAt).toLocaleDateString()}`;
+      } catch {
+        titleEl.textContent = '動画情報の取得に失敗しました。';
       }
     }
 
@@ -120,18 +124,32 @@
           div.innerHTML = `
             <div class="bubble">
               <div>
-                <span class="author">${c.authorDisplayName}</span>
+                <span class="author">${escapeHtml(c.authorDisplayName)}</span>
                 <span class="date">${new Date(c.publishedAt).toLocaleString()}</span>
               </div>
-              <div class="text">${c.textDisplay}</div>
+              <div class="text">${escapeHtml(c.textDisplay)}</div>
             </div>
           `;
           commentsEl.appendChild(div);
         });
-      } catch (e) {
+      } catch {
         commentsEl.innerHTML = '<p>コメントの取得に失敗しました。</p>';
-        console.error(e);
       }
+    }
+
+    // XSS対策に簡易エスケープ関数
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text.replace(/[&<>"']/g, (m) => {
+        switch(m) {
+          case '&': return '&amp;';
+          case '<': return '&lt;';
+          case '>': return '&gt;';
+          case '"': return '&quot;';
+          case '\'': return '&#39;';
+          default: return m;
+        }
+      });
     }
   </script>
 </body>
