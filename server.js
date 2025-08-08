@@ -1,78 +1,168 @@
-// server.js
-const express = require('express');
-const path = require('path');
-const ytdl = require('ytdl-core');
+"use strict";
+const express = require("express");
+const path = require("path");
+const compression = require("compression");
+const bodyParser = require("body-parser");
+const YouTubeJS = require("youtubei.js");
+const serverYt = require("./server/youtube.js");
+const cors = require("cors");
+const cookieParser = require("cookie-parser");
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+let app = express();
+let client;
 
-// 静的ファイル配信（publicフォルダ）
-app.use(express.static(path.join(__dirname, 'public')));
+// 共通ミドルウェア
+app.use(compression());
+app.use(express.static(path.join(__dirname, "public")));
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cors());
+app.set("trust proxy", 1);
+app.use(cookieParser());
 
-// YouTube動画ストリーミングエンドポイント
-app.get('/video', async (req, res) => {
-  const videoId = req.query.id;
-
-  if (!videoId || typeof videoId !== 'string' || videoId.trim() === '') {
-    return res.status(400).send('Error: 動画IDが指定されていません');
-  }
-
-  const url = `https://www.youtube.com/watch?v=${videoId}`;
-
-  try {
-    // 動画情報の取得
-    const info = await ytdl.getInfo(url);
-
-    // HLS形式の動画フォーマットをフィルター
-    const hlsFormats = ytdl.filterFormats(info.formats, 'hls');
-
-    if (!hlsFormats || hlsFormats.length === 0) {
-      return res.status(404).send('Error: HLS形式の動画が見つかりません');
+// 認証チェック
+app.use((req, res, next) => {
+    try {
+        if (req.cookies.loginok !== "ok" && !req.path.includes("login") && !req.path.includes("back")) {
+            return res.redirect("/login");
+        }
+        next();
+    } catch (err) {
+        console.error("Auth Middleware Error:", err);
+        res.status(500).send("Internal server error");
     }
-
-    // 最初のHLS URLにリダイレクト
-    res.redirect(hlsFormats[0].url);
-
-  } catch (error) {
-    console.error('動画ストリーミング中にエラーが発生しました:', error);
-
-    // ytdl-core固有のエラーやネットワークエラーを詳細に分ける
-    if (error instanceof ytdl.errors.VideoUnavailable) {
-      return res.status(404).send('Error: 指定された動画は利用できません');
-    }
-
-    if (error.message && error.message.includes('status code: 410')) {
-      return res.status(410).send('Error: 動画は再生できません（410 Gone）');
-    }
-
-    return res.status(500).send('Error: サーバー内部エラーが発生しました');
-  }
 });
 
-// ルートパスは index.html を返す
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'), (err) => {
-    if (err) {
-      console.error('index.htmlの送信中にエラー:', err);
-      res.status(500).send('Error: ファイル送信中にエラーが発生しました');
+// ルート: /
+app.get("/", (req, res) => {
+    try {
+        if (req.query.r === "y") {
+            res.render("home/index");
+        } else {
+            res.redirect("/wkt");
+        }
+    } catch (err) {
+        console.error("/", err);
+        res.status(500).send("Internal server error");
     }
-  });
 });
 
-// 404ハンドラー（他のルートがなければ）
+// アプリページ
+app.get("/app", (req, res) => {
+    try {
+        res.render("app/list");
+    } catch (err) {
+        console.error("/app", err);
+        res.status(500).send("Internal server error");
+    }
+});
+
+// サブルート
+app.use("/wkt", safeRequire("./routes/wakametube"));
+app.use("/game", safeRequire("./routes/game"));
+app.use("/tools", safeRequire("./routes/tools"));
+app.use("/pp", safeRequire("./routes/proxy"));
+app.use("/wakams", safeRequire("./routes/music"));
+app.use("/blog", safeRequire("./routes/blog"));
+app.use("/sandbox", safeRequire("./routes/sandbox"));
+
+// ログイン
+app.get("/login", (req, res) => {
+    try {
+        res.render("home/login");
+    } catch (err) {
+        console.error("/login", err);
+        res.status(500).send("Internal server error");
+    }
+});
+
+// 動画ページ
+app.get("/watch", (req, res) => {
+    try {
+        const videoId = req.query.v;
+        if (videoId && /^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+            res.redirect(`/wkt/watch/${videoId}`);
+        } else {
+            res.redirect(`/wkt/trend`);
+        }
+    } catch (err) {
+        console.error("/watch", err);
+        res.status(500).send("Internal server error");
+    }
+});
+
+// チャンネル
+app.get("/channel/:id", (req, res) => {
+    try {
+        res.redirect(`/wkt/c/${encodeURIComponent(req.params.id)}`);
+    } catch (err) {
+        console.error("/channel/:id", err);
+        res.status(500).send("Internal server error");
+    }
+});
+app.get("/channel/:id/join", (req, res) => {
+    try {
+        res.redirect(`/wkt/c/${encodeURIComponent(req.params.id)}`);
+    } catch (err) {
+        console.error("/channel/:id/join", err);
+        res.status(500).send("Internal server error");
+    }
+});
+
+// ハッシュタグ
+app.get("/hashtag/:des", (req, res) => {
+    try {
+        res.redirect(`/wkt/s?q=${encodeURIComponent(req.params.des)}`);
+    } catch (err) {
+        console.error("/hashtag/:des", err);
+        res.status(500).send("Internal server error");
+    }
+});
+
+// 404
 app.use((req, res) => {
-  res.status(404).send('Error 404: ページが見つかりません');
+    res.status(404).render("error.ejs", {
+        title: "404 Not found",
+        content: "そのページは存在しません。",
+    });
 });
 
-// グローバル例外ハンドラー（万が一）
-process.on('uncaughtException', (err) => {
-  console.error('uncaughtException:', err);
-});
-process.on('unhandledRejection', (err) => {
-  console.error('unhandledRejection:', err);
+// サブルート読み込み安全関数
+function safeRequire(routePath) {
+    try {
+        return require(routePath);
+    } catch (err) {
+        console.error(`Failed to load route: ${routePath}`, err);
+        return (req, res) => res.status(500).send("Route temporarily unavailable");
+    }
+}
+
+// アプリエラー
+app.on("error", (err) => {
+    console.error("Express App Error:", err);
 });
 
-// サーバー起動
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// YouTubeクライアント初期化（自動リトライ付き）
+async function initInnerTube() {
+    try {
+        client = await YouTubeJS.Innertube.create({ lang: "ja", location: "JP" });
+        serverYt.setClient(client);
+        const listener = app.listen(process.env.PORT || 3000, () => {
+            console.log(process.pid, "Ready.", listener.address().port);
+        });
+    } catch (e) {
+        console.error("InnerTube Init Error:", e);
+        setTimeout(initInnerTube, 10000);
+    }
+}
+
+// グローバル例外キャッチ
+process.on("unhandledRejection", (err) => {
+    console.error("Unhandled Rejection:", err);
 });
+process.on("uncaughtException", (err) => {
+    console.error("Uncaught Exception:", err);
+});
+
+initInnerTube();
