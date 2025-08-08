@@ -1,168 +1,97 @@
 "use strict";
+
 const express = require("express");
 const path = require("path");
 const compression = require("compression");
 const bodyParser = require("body-parser");
 const YouTubeJS = require("youtubei.js");
-const serverYt = require("./server/youtube.js");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 
-let app = express();
-let client;
+// ==== アプリ設定 ====
+const app = express();
+let client; // YouTube APIクライアント
 
-// 共通ミドルウェア
 app.use(compression());
+app.use(cors());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+app.use(cookieParser());
+app.set("trust proxy", 1);
+
+// 静的ファイル
 app.use(express.static(path.join(__dirname, "public")));
+
+// EJSテンプレート設定
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cors());
-app.set("trust proxy", 1);
-app.use(cookieParser());
 
-// 認証チェック
+// ==== ログインチェック（必要な場合） ====
 app.use((req, res, next) => {
-    try {
-        if (req.cookies.loginok !== "ok" && !req.path.includes("login") && !req.path.includes("back")) {
-            return res.redirect("/login");
-        }
-        next();
-    } catch (err) {
-        console.error("Auth Middleware Error:", err);
-        res.status(500).send("Internal server error");
-    }
+  if (
+    req.cookies.loginok !== "ok" &&
+    !req.path.includes("login") &&
+    !req.path.includes("back")
+  ) {
+    return res.redirect("/login");
+  }
+  next();
 });
 
-// ルート: /
+// ==== ルーティング ====
 app.get("/", (req, res) => {
-    try {
-        if (req.query.r === "y") {
-            res.render("home/index");
-        } else {
-            res.redirect("/wkt");
-        }
-    } catch (err) {
-        console.error("/", err);
-        res.status(500).send("Internal server error");
-    }
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// アプリページ
-app.get("/app", (req, res) => {
-    try {
-        res.render("app/list");
-    } catch (err) {
-        console.error("/app", err);
-        res.status(500).send("Internal server error");
-    }
-});
-
-// サブルート
-app.use("/wkt", safeRequire("./routes/wakametube"));
-app.use("/game", safeRequire("./routes/game"));
-app.use("/tools", safeRequire("./routes/tools"));
-app.use("/pp", safeRequire("./routes/proxy"));
-app.use("/wakams", safeRequire("./routes/music"));
-app.use("/blog", safeRequire("./routes/blog"));
-app.use("/sandbox", safeRequire("./routes/sandbox"));
-
-// ログイン
 app.get("/login", (req, res) => {
-    try {
-        res.render("home/login");
-    } catch (err) {
-        console.error("/login", err);
-        res.status(500).send("Internal server error");
-    }
+  res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
-// 動画ページ
+// 動画視聴
 app.get("/watch", (req, res) => {
-    try {
-        const videoId = req.query.v;
-        if (videoId && /^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
-            res.redirect(`/wkt/watch/${videoId}`);
-        } else {
-            res.redirect(`/wkt/trend`);
-        }
-    } catch (err) {
-        console.error("/watch", err);
-        res.status(500).send("Internal server error");
-    }
+  const videoId = req.query.v;
+  if (!videoId) return res.status(400).send("動画IDが必要です");
+  res.sendFile(path.join(__dirname, "public", "watch.html"));
 });
 
-// チャンネル
-app.get("/channel/:id", (req, res) => {
-    try {
-        res.redirect(`/wkt/c/${encodeURIComponent(req.params.id)}`);
-    } catch (err) {
-        console.error("/channel/:id", err);
-        res.status(500).send("Internal server error");
-    }
-});
-app.get("/channel/:id/join", (req, res) => {
-    try {
-        res.redirect(`/wkt/c/${encodeURIComponent(req.params.id)}`);
-    } catch (err) {
-        console.error("/channel/:id/join", err);
-        res.status(500).send("Internal server error");
-    }
+// 動画データAPI（仙人ビュアー用）
+app.get("/api/video/:id", async (req, res) => {
+  try {
+    const videoId = req.params.id;
+    const info = await client.getInfo(videoId);
+    res.json(info);
+  } catch (err) {
+    console.error("動画情報取得エラー:", err.message);
+    res.status(500).json({ error: "動画情報取得に失敗しました" });
+  }
 });
 
-// ハッシュタグ
-app.get("/hashtag/:des", (req, res) => {
-    try {
-        res.redirect(`/wkt/s?q=${encodeURIComponent(req.params.des)}`);
-    } catch (err) {
-        console.error("/hashtag/:des", err);
-        res.status(500).send("Internal server error");
-    }
-});
-
-// 404
+// ==== 404ページ ====
 app.use((req, res) => {
-    res.status(404).render("error.ejs", {
-        title: "404 Not found",
-        content: "そのページは存在しません。",
-    });
+  res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
 });
 
-// サブルート読み込み安全関数
-function safeRequire(routePath) {
-    try {
-        return require(routePath);
-    } catch (err) {
-        console.error(`Failed to load route: ${routePath}`, err);
-        return (req, res) => res.status(500).send("Route temporarily unavailable");
-    }
-}
-
-// アプリエラー
-app.on("error", (err) => {
-    console.error("Express App Error:", err);
-});
-
-// YouTubeクライアント初期化（自動リトライ付き）
+// ==== YouTube API初期化 ====
 async function initInnerTube() {
-    try {
-        client = await YouTubeJS.Innertube.create({ lang: "ja", location: "JP" });
-        serverYt.setClient(client);
-        const listener = app.listen(process.env.PORT || 3000, () => {
-            console.log(process.pid, "Ready.", listener.address().port);
-        });
-    } catch (e) {
-        console.error("InnerTube Init Error:", e);
-        setTimeout(initInnerTube, 10000);
-    }
+  try {
+    client = await YouTubeJS.Innertube.create({
+      lang: "ja",
+      location: "JP",
+    });
+    console.log("YouTubeクライアント初期化成功");
+
+    const port = process.env.PORT || 3000;
+    app.listen(port, () => {
+      console.log(`Server running on port ${port}`);
+    });
+  } catch (err) {
+    console.error("YouTubeクライアント初期化失敗:", err.message);
+    setTimeout(initInnerTube, 10000); // 10秒後に再試行
+  }
 }
 
-// グローバル例外キャッチ
 process.on("unhandledRejection", (err) => {
-    console.error("Unhandled Rejection:", err);
-});
-process.on("uncaughtException", (err) => {
-    console.error("Uncaught Exception:", err);
+  console.error("未処理のPromise拒否:", err);
 });
 
 initInnerTube();
