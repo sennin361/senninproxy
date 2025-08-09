@@ -1,13 +1,9 @@
-const express = require("express");
-const ytdl = require("ytdl-core");
-const { infoGet, getComments } = require("./yt");
+import express from "express";
+import ytdl from "ytdl-core";
+import { infoGet, getComments } from "./yt.js";
 
 const router = express.Router();
 
-/**
- * GET /api/stream/:id
- * 動画情報と直接再生可能なストリームURLを返す
- */
 router.get("/stream/:id", async (req, res) => {
   const id = req.params.id;
   if (!id) return res.status(400).json({ error: "Missing video ID" });
@@ -16,13 +12,16 @@ router.get("/stream/:id", async (req, res) => {
     const info = await infoGet(id);
     if (!info) return res.status(404).json({ error: "Video not found" });
 
-    // 動画の最適なフォーマットを取得（mp4かつ音声付き）
-    const format = ytdl.chooseFormat(info.formats, { quality: "highest", filter: "audioandvideo" });
+    // ytdl-coreで最高画質のストリームURLを選択
+    const format = ytdl.chooseFormat(info.formats, {
+      quality: "highest",
+      filter: (format) => format.hasVideo && format.hasAudio,
+    });
 
     res.json({
       title: info.videoDetails.title,
       author: info.videoDetails.author.name,
-      url: format.url
+      url: format.url,
     });
   } catch (err) {
     console.error(err);
@@ -30,10 +29,6 @@ router.get("/stream/:id", async (req, res) => {
   }
 });
 
-/**
- * GET /api/comments/:id
- * コメント一覧を返す
- */
 router.get("/comments/:id", async (req, res) => {
   const id = req.params.id;
   if (!id) return res.status(400).json({ error: "Missing video ID" });
@@ -42,10 +37,10 @@ router.get("/comments/:id", async (req, res) => {
     const comments = await getComments(id);
     if (!comments) return res.json([]);
 
-    const parsed = comments.map(c => ({
+    const parsed = comments.map((c) => ({
       author: c.author?.name || "Unknown",
       date: c.publishedTime || "",
-      text: c.content || ""
+      text: c.content || "",
     }));
 
     res.json(parsed);
@@ -55,4 +50,4 @@ router.get("/comments/:id", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
