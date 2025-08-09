@@ -2,89 +2,122 @@
 
 const express = require("express");
 const path = require("path");
-const cors = require("cors");
 const compression = require("compression");
+const cors = require("cors");
 const bodyParser = require("body-parser");
-
-const youtube = require("./server/youtube.js"); // YouTube処理用自作モジュール
+const cookieParser = require("cookie-parser");
+const YouTubeJS = require("youtubei.js");
+const serverYt = require("./server/youtube.js");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+let client = null;
+
+// ミドルウェア設定
 app.use(compression());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cors());
 app.use(express.static(path.join(__dirname, "public")));
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.set("trust proxy", 1);
 
-// API: 動画ストリーム情報取得
-app.get("/api/stream/:id", async (req, res) => {
-  const videoId = req.params.id;
-  if (!videoId) {
-    return res.status(400).json({ error: "動画IDが指定されていません。" });
+// 認証の簡易チェック（必要に応じて無効化可能）
+app.use((req, res, next) => {
+  if (req.cookies.loginok !== "ok" && !req.path.includes("login") && !req.path.includes("back")) {
+    return res.redirect("/login");
   }
-  try {
-    const streamData = await youtube.getStream(videoId);
-    if (!streamData || !streamData.url) {
-      return res.status(404).json({ error: "動画ストリームが見つかりません。" });
-    }
-    res.json({
-      title: streamData.title,
-      author: streamData.author,
-      url: streamData.url,
-    });
-  } catch (error) {
-    console.error("動画ストリーム取得失敗:", error);
-    res.status(500).json({ error: "動画の取得に失敗しました。" });
-  }
+  next();
 });
 
-// API: コメント取得
-app.get("/api/comments/:id", async (req, res) => {
-  const videoId = req.params.id;
-  if (!videoId) {
-    return res.status(400).json([]);
-  }
-  try {
-    const commentsRaw = await youtube.getComments(videoId);
-    // コメントの形式は自作youtube.jsの仕様に応じて変えてください
-    const comments = (commentsRaw?.comments || []).map((c) => ({
-      author: c.author.name,
-      date: new Date(c.publishedAt).toLocaleString(),
-      text: c.text,
-    }));
-    res.json(comments);
-  } catch (error) {
-    console.error("コメント取得失敗:", error);
-    res.status(500).json([]);
-  }
-});
+// テンプレート設定（ejs）
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
 
-// ルート（トップ）で index.html を返す
+// ルート
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  if (req.query.r === "y") {
+    res.render("home/index");
+  } else {
+    res.redirect("/wkt");
+  }
 });
 
-// それ以外は404エラー
+app.get("/app", (req, res) => {
+  res.render("app/list");
+});
+
+// 外部ルートを使う例（必要に応じて作成）
+app.use("/wkt", require("./routes/wakametube"));
+app.use("/game", require("./routes/game"));
+app.use("/tools", require("./routes/tools"));
+app.use("/pp", require("./routes/proxy"));
+app.use("/wakams", require("./routes/music"));
+app.use("/blog", require("./routes/blog"));
+app.use("/sandbox", require("./routes/sandbox"));
+
+// ログイン画面
+app.get("/login", (req, res) => {
+  res.render("home/login");
+});
+
+// 動画視聴リダイレクト
+app.get("/watch", (req, res) => {
+  const videoId = req.query.v;
+  if (videoId) {
+    res.redirect(`/wkt/watch/${videoId}`);
+  } else {
+    res.redirect("/wkt/trend");
+  }
+});
+
+// チャンネル関連リダイレクト
+app.get("/channel/:id", (req, res) => {
+  const id = req.params.id;
+  res.redirect(`/wkt/c/${id}`);
+});
+app.get("/channel/:id/join", (req, res) => {
+  const id = req.params.id;
+  res.redirect(`/wkt/c/${id}`);
+});
+
+// ハッシュタグリダイレクト
+app.get("/hashtag/:des", (req, res) => {
+  const des = req.params.des;
+  res.redirect(`/wkt/s?q=${des}`);
+});
+
+// 404ハンドリング
 app.use((req, res) => {
-  res.status(404).send("404 Not Found");
+  res.status(404).render("error.ejs", {
+    title: "404 Not found",
+    content: "そのページは存在しません。",
+  });
 });
 
-// サーバ起動時に YouTubeクライアントを初期化
-async function init() {
-  try {
-    // youtube.js内で YouTube APIクライアント初期化処理を行う場合はここで呼び出すなど
-    // 例: await youtube.initClient();
+// グローバルエラーハンドラー
+app.on("error", console.error);
 
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+// YouTubeクライアント初期化関数
+async function initInnerTube() {
+  try {
+    client = await YouTubeJS.Innertube.create({ lang: "ja", location: "JP" });
+    serverYt.setClient(client);
+
+    const listener = app.listen(process.env.PORT || 3000, () => {
+      console.log(process.pid, "Server ready on port", listener.address().port);
     });
   } catch (e) {
-    console.error("初期化失敗:", e);
-    setTimeout(init, 10000);
+    console.error("InnerTube init error:", e);
+    setTimeout(initInnerTube, 10000);
   }
 }
 
-init();
+// 未処理のPromise拒否をログ
+process.on("unhandledRejection", (reason, p) => {
+  console.error("Unhandled Rejection at:", p, "reason:", reason);
+});
+
+// サーバ起動
+initInnerTube();
 
 module.exports = app;
