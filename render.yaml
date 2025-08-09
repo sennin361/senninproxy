@@ -1,15 +1,18 @@
+# Render.com のサービス設定ファイル例
+
 services:
   - type: web
     name: youtube-viewer
     env: node
     region: oregon
-    plan: starter
-    buildCommand: "npm install"
-    startCommand: "npm start"
+    branch: main
+    buildCommand: 'npm install'
+    startCommand: 'npm start'
     autoDeploy: true
+    plan: starter
     envVars:
       - key: NODE_ENV
         value: production
-      # もし必要ならAPIキーや他の環境変数をここに追加してください
+      # 必要に応じて YouTube APIキーなど環境変数をここに追加
       # - key: YOUTUBE_API_KEY
-      #   value: your_api_key_here
+      #   value: あなたのAPIキー
