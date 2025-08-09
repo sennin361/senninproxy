@@ -1,7 +1,7 @@
 {
-  "name": "youtube-viewer",
+  "name": "lentrance-reader",
   "version": "1.0.0",
-  "description": "YouTube video & comment viewer using youtubei.js and Express",
+  "description": "YouTube動画をストリームURL経由で再生するPWAビューア",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,24 +9,23 @@
   },
   "keywords": [
     "youtube",
-    "express",
-    "viewer",
-    "comments",
-    "youtubei.js"
+    "stream",
+    "video",
+    "pwa",
+    "express"
   ],
-  "author": "Your Name",
+  "author": "あなたの名前",
   "license": "MIT",
   "dependencies": {
-    "compression": "^1.7.4",
-    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
     "express": "^4.18.2",
-    "youtubei.js": "^9.1.0"
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.x"
   }
 }
