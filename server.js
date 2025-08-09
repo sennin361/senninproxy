@@ -1,66 +1,109 @@
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch";
-import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+import bodyParser from "body-parser";
 
-dotenv.config();
+// 自作モジュール
+import { getYouTube } from "./video.js";
+import { setClient, getComments, search, getChannel } from "./yt.js";
+
+// YouTube API クライアント（youtubei.js）
+import { Innertube } from "youtubei.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// 環境変数
-const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.YOUTUBE_API_KEY;
+// youtubei.js 初期化
+(async () => {
+  const client = await Innertube.create({
+    location: "JP",
+    lang: "ja",
+    gl: "JP"
+  });
+  setClient(client);
+})();
 
-// ストリームURL取得（簡易版）
+// 動画ストリーム取得
 app.get("/api/stream/:id", async (req, res) => {
   const videoId = req.params.id;
-
   try {
-    // 本来はYouTube APIやytdlpでストリームURLを取得する
-    // ここではデモ用にMP4直リンクを返す
-    const data = {
-      title: "デモ動画",
-      author: "Lentrance Reader",
-      url: `https://example.com/videos/${videoId}.mp4`
-    };
-    res.json(data);
+    const data = await getYouTube(videoId);
+    if (!data || !data.stream_url) {
+      return res.status(404).json({ error: "動画が見つかりません" });
+    }
+    res.json({
+      title: data.videoTitle,
+      author: data.channelName,
+      channelId: data.channelId,
+      channelImage: data.channelImage,
+      description: data.videoDes,
+      views: data.videoViews,
+      likes: data.likeCount,
+      url: data.stream_url,
+      resolutions: data.streamUrls
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "ストリームURL取得失敗" });
+    res.status(500).json({ error: "ストリーム取得失敗" });
   }
 });
 
-// コメント取得（簡易版）
+// コメント取得
 app.get("/api/comments/:id", async (req, res) => {
-  const videoId = req.params.id;
-
   try {
-    // 本来はYouTube API commentThreads で取得
-    // ここではダミーコメント
-    const comments = [
-      {
-        author: "Alice",
-        date: new Date().toLocaleString(),
-        text: "素晴らしい動画ですね！"
-      },
-      {
-        author: "Bob",
-        date: new Date().toLocaleString(),
-        text: "とても参考になりました。"
-      }
-    ];
-    res.json(comments);
+    const commentsData = await getComments(req.params.id);
+    if (!commentsData) return res.json([]);
+    const formatted = commentsData.map(c => ({
+      author: c.author?.name || "Unknown",
+      date: c.published || "",
+      text: c.content || ""
+    }));
+    res.json(formatted);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "コメント取得失敗" });
   }
 });
 
-// 静的ファイル配信（publicフォルダにHTML等を置く）
-app.use(express.static("public"));
+// 検索
+app.get("/api/search", async (req, res) => {
+  const q = req.query.q;
+  if (!q) return res.status(400).json({ error: "クエリが必要です" });
+  try {
+    const results = await search(q);
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "検索失敗" });
+  }
+});
 
+// チャンネル情報取得
+app.get("/api/channel/:id", async (req, res) => {
+  try {
+    const data = await getChannel(req.params.id);
+    res.json(data || {});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "チャンネル取得失敗" });
+  }
+});
+
+// 静的ファイル配信
+app.use(express.static(path.join(__dirname, "public")));
+
+// SPA用フォールバック
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// 起動
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Server is running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
