@@ -13,72 +13,53 @@
       background: #1e1e2f;
       color: #fff;
       margin: 0;
-      padding: 0;
-    }
-    .container {
-      max-width: 1200px;
-      margin: auto;
       padding: 1em;
     }
-    .player-section {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1em;
+    .container {
+      max-width: 900px;
+      margin: auto;
     }
     video {
-      flex: 3;
       width: 100%;
-      max-height: 480px;
+      height: 450px;
       border-radius: 8px;
       background: black;
     }
-    .video-info {
-      flex: 1;
-      min-width: 250px;
-      background: #2a2c3f;
-      border-radius: 8px;
-      padding: 1em;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5em;
-    }
     .title {
-      font-size: 1.4em;
-      font-weight: bold;
-    }
-    .channel {
-      display: flex;
-      align-items: center;
-      gap: 0.5em;
-    }
-    .channel img {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
+      font-size: 1.5em;
+      margin: 0.5em 0;
     }
     .meta {
-      font-size: 0.9em;
       color: #aaa;
+      margin-bottom: 1em;
+    }
+    .meta a {
+      color: #4fc3f7;
+      text-decoration: none;
+    }
+    .meta a:hover {
+      text-decoration: underline;
     }
     .back {
+      margin-top: 1em;
       display: inline-block;
-      margin-top: 0.5em;
-      padding: 0.4em 0.8em;
+      padding: 0.5em 1em;
       background: #4caf50;
       color: white;
       border-radius: 4px;
       text-decoration: none;
-      text-align: center;
     }
-    /* コメント欄 */
+    .open-stream {
+      margin-top: 1em;
+      display: inline-block;
+      padding: 0.5em 1em;
+      background: #2196f3;
+      color: white;
+      border-radius: 4px;
+      text-decoration: none;
+    }
     #comments {
       margin-top: 2em;
-      background: #24263b;
-      border-radius: 8px;
-      padding: 1em;
-    }
-    #comments h2 {
-      margin-top: 0;
     }
     .comment {
       display: flex;
@@ -118,39 +99,27 @@
 </head>
 <body>
   <div class="container">
-    <div class="player-section">
-      <!-- 🎥 動画プレイヤー -->
-      <video id="video-player" controls autoplay></video>
+    <!-- 🎥 HTML5 video player -->
+    <video id="video-player" controls autoplay></video>
 
-      <!-- 📄 動画情報 -->
-      <div class="video-info">
-        <div class="title" id="video-title">タイトル読み込み中...</div>
-        <div class="channel">
-          <img id="channel-image" src="icon-192.png" alt="Channel">
-          <span id="channel-name">チャンネル名</span>
-        </div>
-        <div class="meta" id="video-meta"></div>
-        <a href="index.html" class="back">← 戻る</a>
-      </div>
-    </div>
+    <div class="title" id="video-title">タイトル読み込み中...</div>
+    <div class="meta" id="video-meta"></div>
 
-    <!-- 💬 コメント欄 -->
-    <div id="comments">
-      <h2>コメント</h2>
-      <p>読み込み中...</p>
-    </div>
+    <a href="index.html" class="back">← 戻る</a>
+    <a id="open-stream-btn" class="open-stream" href="#" target="_blank" style="display:none;">ストリームURLを開く</a>
+
+    <h2>コメント</h2>
+    <div id="comments"><p>読み込み中...</p></div>
   </div>
 
   <script>
     const params = new URLSearchParams(window.location.search);
     const videoId = params.get('id');
-
     const videoEl = document.getElementById('video-player');
     const titleEl = document.getElementById('video-title');
     const metaEl = document.getElementById('video-meta');
-    const channelNameEl = document.getElementById('channel-name');
-    const channelImageEl = document.getElementById('channel-image');
     const commentsEl = document.getElementById('comments');
+    const openStreamBtn = document.getElementById('open-stream-btn');
 
     if (!videoId) {
       titleEl.textContent = '無効な動画IDです';
@@ -166,11 +135,15 @@
         if (!res.ok) throw new Error('動画情報取得失敗');
         const data = await res.json();
 
-        videoEl.src = data.url;
         titleEl.textContent = data.title || '無題';
-        metaEl.textContent = `${data.views || 0} 回視聴 ・ ${new Date().toLocaleDateString()}`;
-        channelNameEl.textContent = data.author || 'Unknown';
-        if (data.channelImage) channelImageEl.src = data.channelImage;
+        metaEl.innerHTML = `${data.author || 'Unknown'} - ${new Date().toLocaleDateString()}`;
+        videoEl.src = data.url;
+
+        // ストリームURLボタン表示
+        if (data.url) {
+          openStreamBtn.href = data.url;
+          openStreamBtn.style.display = 'inline-block';
+        }
       } catch (e) {
         titleEl.textContent = '動画の取得に失敗しました';
         videoEl.style.display = 'none';
@@ -184,9 +157,9 @@
         if (!res.ok) throw new Error('コメント取得失敗');
         const data = await res.json();
 
-        commentsEl.innerHTML = '<h2>コメント</h2>';
+        commentsEl.innerHTML = '';
         if (!data || data.length === 0) {
-          commentsEl.innerHTML += '<p>コメントがありません。</p>';
+          commentsEl.innerHTML = '<p>コメントがありません。</p>';
           return;
         }
         data.forEach(c => {
@@ -204,11 +177,12 @@
           commentsEl.appendChild(div);
         });
       } catch (e) {
-        commentsEl.innerHTML = '<h2>コメント</h2><p>コメントの取得に失敗しました。</p>';
+        commentsEl.innerHTML = '<p>コメントの取得に失敗しました。</p>';
         console.error(e);
       }
     }
 
+    // PWA対応（必要なら）
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js')
         .then(() => console.log("Service Worker 登録成功"))
