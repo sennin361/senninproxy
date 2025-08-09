@@ -1,18 +1,15 @@
-# Render.com のサービス設定ファイル例
-
 services:
   - type: web
-    name: youtube-viewer
+    name: lentrance-reader
     env: node
     region: oregon
-    branch: main
-    buildCommand: 'npm install'
-    startCommand: 'npm start'
-    autoDeploy: true
-    plan: starter
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
-      # 必要に応じて YouTube APIキーなど環境変数をここに追加
-      # - key: YOUTUBE_API_KEY
-      #   value: あなたのAPIキー
+      - key: PORT
+        value: 10000
+      - key: YOUTUBE_API_KEY
+        sync: false
