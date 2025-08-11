@@ -1,73 +1,55 @@
-import express from "express";
-import path from "path";
-import { fileURLToPath } from "url";
-import compression from "compression";
-import bodyParser from "body-parser";
-import cors from "cors";
-import cookieParser from "cookie-parser";
-
-import YouTubeJS from "youtubei.js";
-
-import ytRoutes from "./routes/yt.js";
-import videoRoutes from "./routes/video.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// server.js
+const express = require('express');
+const axios = require('axios');
+const path = require('path');
+const { getYouTube } = require('./ytapi');
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-app.use(compression());
-app.use(express.static(path.join(__dirname, "public")));
-app.set("view engine", "ejs");
-app.set("views", path.join(__dirname, "views"));
+app.use(express.static(path.join(__dirname, 'public')));
 
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cors());
-app.set("trust proxy", 1);
-app.use(cookieParser());
-
-// 認証チェック例（必要なら）
-app.use((req, res, next) => {
-  if (req.cookies.loginok !== "ok" && !req.path.includes("login") && !req.path.includes("back")) {
-    return res.redirect("/login");
-  }
-  next();
-});
-
-// ルーティング
-app.use("/api", videoRoutes);
-app.use("/api/yt", ytRoutes);
-
-app.get("/", (req, res) => {
-  res.redirect("/index.html");
-});
-
-app.get("/login", (req, res) => {
-  res.send("ログインページをここに作成してください");
-});
-
-// 404
-app.use((req, res) => {
-  res.status(404).send("404 Not Found");
-});
-
-app.on("error", console.error);
-
-let client;
-
-async function initInnerTube() {
+// 動画メタ情報取得API
+app.get('/api/stream/:id', async (req, res) => {
   try {
-    client = await YouTubeJS.Innertube.create({ lang: "ja", location: "JP" });
-    ytRoutes.setClient(client);
-    const listener = app.listen(process.env.PORT || 3000, () => {
-      console.log(process.pid, "Server ready on port", listener.address().port);
+    const info = await getYouTube(req.params.id);
+    res.json({
+      title: info.videoTitle,
+      author: info.channelName,
+      streamUrls: info.streamUrls
     });
-  } catch (e) {
-    console.error("Innertube初期化失敗:", e);
-    setTimeout(initInnerTube, 10000);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '動画情報取得失敗' });
   }
-}
+});
 
-process.on("unhandledRejection", console.error);
+// Range対応ストリームAPI
+app.get('/api/stream/:id/:res', async (req, res) => {
+  const { id, res: resolution } = req.params;
+  try {
+    const info = await getYouTube(id);
+    const targetStream = info.streamUrls.find(v => v.resolution === resolution);
+    if (!targetStream) {
+      return res.status(404).send("指定の解像度がありません");
+    }
 
-initInnerTube();
+    const range = req.headers.range || "";
+    const streamUrl = targetStream.url;
+
+    const response = await axios.get(streamUrl, {
+      responseType: "stream",
+      headers: { Range: range }
+    });
+
+    res.writeHead(response.status, response.headers);
+    response.data.pipe(res);
+  } catch (err) {
+    console.error("ストリーム取得失敗:", err);
+    res.status(500).send("ストリーム取得失敗");
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
