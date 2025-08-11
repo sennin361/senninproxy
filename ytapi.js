@@ -1,46 +1,24 @@
 // ytapi.js
 const axios = require('axios');
 
-let apis = null;
-const MAX_API_WAIT_TIME = 3000; 
+const apis = [
+  "https://invidious.snopyta.org",
+  "https://invidious.kavin.rocks",
+  "https://invidious.namazso.eu",
+  "https://invidious.xyz"
+];
+
+const MAX_API_WAIT_TIME = 3000;
 const MAX_TIME = 10000;
-
-async function getapis() {
-    try {
-        const response = await axios.get('https://raw.githubusercontent.com/wakame02/wktopu/refs/heads/main/inv.json');
-        apis = await response.data;
-        console.log('データを取得しました:', apis);
-    } catch (error) {
-        console.error('データの取得に失敗しました:', error);
-        await getapisgit();
-    }
-}
-
-async function getapisgit() {
-    try {
-        const response = await axios.get('https://raw.githubusercontent.com/wakame02/wktopu/refs/heads/main/inv.json');
-        apis = await response.data;
-        console.log('データを取得しました:', apis);
-    } catch (error) {
-        console.error('データの取得に失敗しました:', error);
-    }
-}
 
 async function ggvideo(videoId) {
   const startTime = Date.now();
-  for (let i = 0; i < 20; i++) {
-    if (Math.floor(Math.random() * 20) === 0) {
-        await getapis();
-    }
-  }
-  if(!apis){
-    await getapisgit();
-  }
+
   for (const instance of apis) {
     try {
       const response = await axios.get(`${instance}/api/v1/videos/${videoId}`, { timeout: MAX_API_WAIT_TIME });
-      if (response.data && response.data.formatStreams) {
-        return response.data; 
+      if (response.data && (response.data.formatStreams || response.data.adaptiveFormats)) {
+        return response.data;
       }
     } catch (error) {
       console.error(`エラーだよ: ${instance} - ${error.message}`);
@@ -56,13 +34,17 @@ async function getYouTube(videoId) {
   try {
     const videoInfo = await ggvideo(videoId);
     const formatStreams = videoInfo.formatStreams || [];
-    const audioStreams = videoInfo.adaptiveFormats || [];
+    const adaptiveFormats = videoInfo.adaptiveFormats || [];
 
-    const streamUrls = audioStreams
-      .filter(stream => stream.container === 'webm' && stream.resolution)
+    // 動画と音声のストリームを結合しやすい形で用意
+    const streamUrls = adaptiveFormats
+      .filter(stream => stream.container && stream.url)
       .map(stream => ({
         url: stream.url,
-        resolution: stream.resolution,
+        resolution: stream.resolution || 'audio',
+        qualityLabel: stream.qualityLabel || '',
+        itag: stream.itag || '',
+        mimeType: stream.mimeType || '',
       }));
 
     return {
