@@ -2,14 +2,17 @@ services:
   - type: web
     name: lentrance-reader
     env: node
-    region: oregon
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    branch: main
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    autoDeploy: true
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
       - key: YOUTUBE_API_KEY
+        fromDatabase: false
         sync: false
+        value: "<ここにGoogle YouTube APIキーを入れてください>"
+    healthCheckPath: "/"
+    routes:
+      - path: /*
+        preservePath: true
